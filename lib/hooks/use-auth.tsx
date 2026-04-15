@@ -32,6 +32,7 @@ interface AuthContextType {
   fetchUser: () => Promise<void>
   updateUser: (data: Partial<User>) => void
   checkToken: () => Promise<boolean>
+  setUser: (user: User | null) => void  // TAMBAHKAN INI
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -194,7 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout, 
       fetchUser, 
       updateUser, 
-      checkToken 
+      checkToken,
+      setUser  // TAMBAHKAN INI
     }}>
       {children}
     </AuthContext.Provider>

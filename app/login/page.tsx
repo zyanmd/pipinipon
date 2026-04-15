@@ -12,7 +12,7 @@ import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, Sparkles } from "lucide-re
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
-import { useGoogleLogin } from "@react-oauth/google"
+import { googleAPI } from "@/lib/api"
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -25,7 +25,7 @@ const GoogleIcon = () => (
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, loginWithGoogle, isLoading, user } = useAuth()
+  const { login, isLoading, user } = useAuth()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -68,35 +68,23 @@ export default function LoginPage() {
     }
   }
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setIsGoogleLoading(true)
-      try {
-        await loginWithGoogle(tokenResponse.access_token)
-        // Redirect akan otomatis terjadi karena user state berubah
-      } catch (error: any) {
-        console.error("Google login error:", error)
-        toast({
-          title: "Gagal",
-          description: error.response?.data?.error || "Gagal login dengan Google",
-          variant: "destructive",
-        })
-        setIsGoogleLoading(false)
-      }
-    },
-    onError: () => {
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true)
+    try {
+      // Panggil API backend untuk dapat URL login Google
+      const response = await googleAPI.googleLogin()
+      const authUrl = response.data.auth_url
+      // Redirect ke halaman Google login
+      window.location.href = authUrl
+    } catch (error: any) {
+      console.error("Google login error:", error)
       toast({
         title: "Gagal",
-        description: "Gagal terhubung dengan Google. Silakan coba lagi.",
+        description: error.response?.data?.error || "Gagal terhubung dengan Google",
         variant: "destructive",
       })
       setIsGoogleLoading(false)
-    },
-    flow: "implicit",
-  })
-
-  const handleGoogleLogin = () => {
-    googleLogin()
+    }
   }
 
   if (!mounted) {

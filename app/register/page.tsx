@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { User, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/components/ui/use-toast"
-import { useGoogleLogin } from "@react-oauth/google"
+import { googleAPI } from "@/lib/api"
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -24,7 +24,7 @@ const GoogleIcon = () => (
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register, loginWithGoogle, isLoading, user } = useAuth()
+  const { register, isLoading, user } = useAuth()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -87,34 +87,21 @@ export default function RegisterPage() {
     }
   }
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setIsGoogleLoading(true)
-      try {
-        await loginWithGoogle(tokenResponse.access_token)
-      } catch (error: any) {
-        console.error("Google register error:", error)
-        toast({
-          title: "Gagal",
-          description: error.response?.data?.error || "Gagal mendaftar dengan Google",
-          variant: "destructive",
-        })
-        setIsGoogleLoading(false)
-      }
-    },
-    onError: () => {
+  const handleGoogleRegister = async () => {
+    setIsGoogleLoading(true)
+    try {
+      const response = await googleAPI.googleLogin()
+      const authUrl = response.data.auth_url
+      window.location.href = authUrl
+    } catch (error: any) {
+      console.error("Google register error:", error)
       toast({
         title: "Gagal",
-        description: "Gagal terhubung dengan Google. Silakan coba lagi.",
+        description: error.response?.data?.error || "Gagal mendaftar dengan Google",
         variant: "destructive",
       })
       setIsGoogleLoading(false)
-    },
-    flow: "implicit",
-  })
-
-  const handleGoogleRegister = () => {
-    googleLogin()
+    }
   }
 
   const isPasswordValid = passwordStrength.length && passwordStrength.number && passwordStrength.letter

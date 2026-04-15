@@ -315,13 +315,14 @@ function LoadingFallback() {
   )
 }
 
+// Google Client ID - GANTI DENGAN CLIENT ID ASLI ANDA
+const GOOGLE_CLIENT_ID = "YOUR_ACTUAL_GOOGLE_CLIENT_ID_HERE"
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "dummy-client-id-for-build"
-
   return (
     <html lang="id" suppressHydrationWarning>
       <head suppressHydrationWarning>
@@ -345,7 +346,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <GoogleOAuthProvider clientId={googleClientId}>
+          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
             <AuthProvider>
               <a
                 href="#main-content"
