@@ -55,10 +55,6 @@ export const metadata: Metadata = {
   publisher: siteName,
   category: "Education",
   
-  // Rating untuk konten edukasi
-  classification: "Educational Content",
-  rating: "General",
-  
   openGraph: {
     type: "website",
     locale: "id_ID",
@@ -110,7 +106,6 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-icon.png", sizes: "180x180" }],
     shortcut: "/favicon.ico",
   },
-  // Hapus manifest
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -185,7 +180,6 @@ const jsonLd = {
       educationalLevel: ["N5", "N4", "N3", "N2", "N1"],
       inLanguage: "id-ID",
       isAccessibleForFree: true,
-      // Tambahan rating untuk course
       aggregateRating: {
         "@type": "AggregateRating",
         ratingValue: "4.8",
