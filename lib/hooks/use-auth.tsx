@@ -1,17 +1,25 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react"
-import { authAPI, userAPI } from "@/lib/api"
+import { authAPI, userAPI, googleAPI } from "@/lib/api"
 
 interface User {
   id: number
   username: string
   email: string
-  avatar: string
+  avatar: string | null
+  cover_photo?: string | null
   role: string
   xp: number
   rank: string
   streak: number
+  is_verified?: number
+  verified_badge?: number
+  bio?: string
+  website?: string
+  location?: string
+  created_at?: string
+  updated_at?: string
 }
 
 interface AuthContextType {
@@ -19,6 +27,7 @@ interface AuthContextType {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
   logout: () => void
   fetchUser: () => Promise<void>
   updateUser: (data: Partial<User>) => void
@@ -41,7 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("refresh_token", refresh_token)
       setUser(user)
       
-      // Start token check after login
       startTokenCheck()
     } catch (error) {
       throw error
@@ -59,7 +67,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("refresh_token", refresh_token)
       setUser(user)
       
-      // Start token check after register
+      startTokenCheck()
+    } catch (error) {
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loginWithGoogle = async (idToken: string) => {
+    setIsLoading(true)
+    try {
+      const response = await googleAPI.loginWithGoogleToken(idToken)
+      const { access_token, refresh_token, user } = response.data
+      localStorage.setItem("access_token", access_token)
+      localStorage.setItem("refresh_token", refresh_token)
+      setUser(user)
+      
       startTokenCheck()
     } catch (error) {
       throw error
@@ -69,7 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    // Clear token check interval
     if (tokenCheckInterval.current) {
       clearInterval(tokenCheckInterval.current)
       tokenCheckInterval.current = null
@@ -91,7 +114,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await userAPI.getMyProfile()
       setUser(response.data.data.user)
-      // Start token check after fetching user
       startTokenCheck()
     } catch (error) {
       console.error("Error fetching user:", error)
@@ -120,18 +142,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const startTokenCheck = () => {
-    // Clear existing interval
     if (tokenCheckInterval.current) {
       clearInterval(tokenCheckInterval.current)
     }
     
-    // Check token validity every hour (3600000 ms)
     tokenCheckInterval.current = setInterval(async () => {
       const isValid = await checkToken()
       if (!isValid && user) {
         console.log("Token expired, attempting to refresh...")
         
-        // Try to refresh token
         try {
           const refreshToken = localStorage.getItem("refresh_token")
           if (!refreshToken) {
@@ -153,7 +172,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 3600000) // 1 jam
   }
 
-  // Stop token check on unmount
   useEffect(() => {
     return () => {
       if (tokenCheckInterval.current) {
@@ -172,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading, 
       login, 
       register, 
+      loginWithGoogle,
       logout, 
       fetchUser, 
       updateUser, 

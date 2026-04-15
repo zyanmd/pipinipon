@@ -11,10 +11,9 @@ import { Label } from "@/components/ui/label"
 import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, Sparkles } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { googleAPI } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
+import { useGoogleLogin } from "@react-oauth/google"
 
-// Custom Google Icon
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -26,7 +25,7 @@ const GoogleIcon = () => (
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isLoading, user } = useAuth()
+  const { login, loginWithGoogle, isLoading, user } = useAuth()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -36,13 +35,20 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleReady, setIsGoogleReady] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    if (user) {
+    // Cek apakah Google Client ID tersedia
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    setIsGoogleReady(!!googleClientId)
+  }, [])
+
+  useEffect(() => {
+    if (mounted && user) {
       router.push("/dashboard")
     }
-  }, [user, router])
+  }, [user, router, mounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,26 +67,49 @@ export default function LoginPage() {
 
     try {
       await login(formData.email, formData.password)
-      router.push("/dashboard")
     } catch (err: any) {
       setError(err.response?.data?.error || "Login gagal. Periksa email dan password Anda.")
     }
   }
 
-  const handleGoogleLogin = async () => {
-    setIsGoogleLoading(true)
-    try {
-      const response = await googleAPI.googleLogin()
-      const authUrl = response.data.auth_url
-      window.location.href = authUrl
-    } catch (error: any) {
-      console.error("Google login error:", error)
+  // Hanya panggil useGoogleLogin jika Google siap
+  const googleLogin = isGoogleReady ? useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsGoogleLoading(true)
+      try {
+        await loginWithGoogle(tokenResponse.access_token)
+      } catch (error: any) {
+        console.error("Google login error:", error)
+        toast({
+          title: "Gagal",
+          description: error.response?.data?.error || "Gagal login dengan Google",
+          variant: "destructive",
+        })
+        setIsGoogleLoading(false)
+      }
+    },
+    onError: () => {
       toast({
         title: "Gagal",
-        description: error.response?.data?.error || "Gagal terhubung dengan Google",
+        description: "Gagal terhubung dengan Google. Silakan coba lagi.",
         variant: "destructive",
       })
       setIsGoogleLoading(false)
+    },
+    flow: "implicit",
+  }) : null
+
+  const handleGoogleLogin = () => {
+    if (!isGoogleReady) {
+      toast({
+        title: "Fitur Tidak Tersedia",
+        description: "Login dengan Google sedang dalam pemeliharaan. Silakan login dengan email dan password.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (googleLogin) {
+      googleLogin()
     }
   }
 
@@ -90,7 +119,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-background via-background to-muted/20">
-      {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-japanese-500/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl" />
@@ -103,7 +131,6 @@ export default function LoginPage() {
         className="w-full max-w-md relative z-10"
       >
         <Card className="border shadow-2xl bg-card/80 backdrop-blur-sm overflow-hidden">
-          {/* Top gradient bar */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-japanese-500 via-orange-500 to-japanese-600" />
           
           <CardHeader className="space-y-1 text-center pt-8">
@@ -125,7 +152,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-5">
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {error && (
                   <motion.div
                     initial={{ opacity: 0, x: -20, height: 0 }}
@@ -188,7 +215,7 @@ export default function LoginPage() {
               <div className="flex items-center justify-end">
                 <Link
                   href="/forgot-password"
-                className="text-sm text-japanese-600 hover:text-japanese-700 dark:text-japanese-400 dark:hover:text-japanese-300 transition-colors font-medium"
+                  className="text-sm text-japanese-600 hover:text-japanese-700 dark:text-japanese-400 dark:hover:text-japanese-300 transition-colors font-medium"
                 >
                   Lupa password?
                 </Link>
@@ -227,7 +254,7 @@ export default function LoginPage() {
                 type="button"
                 variant="outline"
                 onClick={handleGoogleLogin}
-                disabled={isGoogleLoading}
+                disabled={isGoogleLoading || !isGoogleReady}
                 className="w-full h-11 gap-2 border-border hover:bg-muted/50 transition-all duration-200"
               >
                 {isGoogleLoading ? (
@@ -254,7 +281,6 @@ export default function LoginPage() {
           </form>
         </Card>
 
-        {/* Decorative text */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

@@ -1,0 +1,17 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /private/
+Disallow: /dashboard/
+Disallow: /profile/
+Disallow: /settings/
+
+# Sitemap
+Sitemap: https://pipinipon.id/sitemap.xml
+
+# Crawl delay untuk mengurangi beban server
+Crawl-delay: 1
+
+# Host
+Host: https://pipinipon.id
