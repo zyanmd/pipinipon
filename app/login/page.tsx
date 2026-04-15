@@ -35,13 +35,9 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [isGoogleReady, setIsGoogleReady] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    // Cek apakah Google Client ID tersedia
-    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    setIsGoogleReady(!!googleClientId)
   }, [])
 
   useEffect(() => {
@@ -72,12 +68,12 @@ export default function LoginPage() {
     }
   }
 
-  // Hanya panggil useGoogleLogin jika Google siap
-  const googleLogin = isGoogleReady ? useGoogleLogin({
+  const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setIsGoogleLoading(true)
       try {
         await loginWithGoogle(tokenResponse.access_token)
+        // Redirect akan otomatis terjadi karena user state berubah
       } catch (error: any) {
         console.error("Google login error:", error)
         toast({
@@ -97,20 +93,10 @@ export default function LoginPage() {
       setIsGoogleLoading(false)
     },
     flow: "implicit",
-  }) : null
+  })
 
   const handleGoogleLogin = () => {
-    if (!isGoogleReady) {
-      toast({
-        title: "Fitur Tidak Tersedia",
-        description: "Login dengan Google sedang dalam pemeliharaan. Silakan login dengan email dan password.",
-        variant: "destructive",
-      })
-      return
-    }
-    if (googleLogin) {
-      googleLogin()
-    }
+    googleLogin()
   }
 
   if (!mounted) {
@@ -254,7 +240,7 @@ export default function LoginPage() {
                 type="button"
                 variant="outline"
                 onClick={handleGoogleLogin}
-                disabled={isGoogleLoading || !isGoogleReady}
+                disabled={isGoogleLoading}
                 className="w-full h-11 gap-2 border-border hover:bg-muted/50 transition-all duration-200"
               >
                 {isGoogleLoading ? (

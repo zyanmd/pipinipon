@@ -37,7 +37,6 @@ export default function RegisterPage() {
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [isGoogleReady, setIsGoogleReady] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState({
     length: false,
     number: false,
@@ -46,9 +45,6 @@ export default function RegisterPage() {
 
   useEffect(() => {
     setMounted(true)
-    // Cek apakah Google Client ID tersedia
-    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    setIsGoogleReady(!!googleClientId)
   }, [])
 
   useEffect(() => {
@@ -91,8 +87,7 @@ export default function RegisterPage() {
     }
   }
 
-  // Hanya panggil useGoogleLogin jika Google siap
-  const googleLogin = isGoogleReady ? useGoogleLogin({
+  const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setIsGoogleLoading(true)
       try {
@@ -116,20 +111,10 @@ export default function RegisterPage() {
       setIsGoogleLoading(false)
     },
     flow: "implicit",
-  }) : null
+  })
 
   const handleGoogleRegister = () => {
-    if (!isGoogleReady) {
-      toast({
-        title: "Fitur Tidak Tersedia",
-        description: "Pendaftaran dengan Google sedang dalam pemeliharaan. Silakan daftar dengan email dan password.",
-        variant: "destructive",
-      })
-      return
-    }
-    if (googleLogin) {
-      googleLogin()
-    }
+    googleLogin()
   }
 
   const isPasswordValid = passwordStrength.length && passwordStrength.number && passwordStrength.letter
@@ -371,7 +356,7 @@ export default function RegisterPage() {
                 type="button"
                 variant="outline"
                 onClick={handleGoogleRegister}
-                disabled={isGoogleLoading || !isGoogleReady}
+                disabled={isGoogleLoading}
                 className="w-full h-11 gap-2 border-border hover:bg-muted/50 transition-all duration-200"
               >
                 {isGoogleLoading ? (

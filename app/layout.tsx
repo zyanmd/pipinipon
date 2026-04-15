@@ -112,7 +112,7 @@ export const metadata: Metadata = {
     title: siteName,
   },
   verification: {
-    google: "google-site-verification-token",
+    google: "Qq4kHEC3HeS9vlApBaI91O73X21vKWspGTKA4tgsmg4",
     other: {
       "yandex-verification": ["yandex-verification-token"],
       "facebook-domain-verification": ["facebook-domain-verification-token"],
@@ -320,18 +320,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-
-  const renderWithGoogleProvider = (children: React.ReactNode) => {
-    if (googleClientId) {
-      return (
-        <GoogleOAuthProvider clientId={googleClientId}>
-          {children}
-        </GoogleOAuthProvider>
-      )
-    }
-    return <>{children}</>
-  }
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "dummy-client-id-for-build"
 
   return (
     <html lang="id" suppressHydrationWarning>
@@ -356,7 +345,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {renderWithGoogleProvider(
+          <GoogleOAuthProvider clientId={googleClientId}>
             <AuthProvider>
               <a
                 href="#main-content"
@@ -454,7 +443,7 @@ export default function RootLayout({
                 />
               </div>
             </AuthProvider>
-          )}
+          </GoogleOAuthProvider>
         </ThemeProvider>
       </body>
     </html>
