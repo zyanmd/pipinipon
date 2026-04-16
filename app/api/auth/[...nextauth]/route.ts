@@ -1,16 +1,41 @@
-    import NextAuth from "next-auth"
+import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
 
+// Extend tipe bawaan NextAuth
+declare module "next-auth" {
+  interface User {
+    backendToken?: string
+    backendRefreshToken?: string
+    role?: string
+  }
+  interface Session {
+    backendToken?: string
+    backendRefreshToken?: string
+    user: {
+      id?: string
+      role?: string
+      email?: string
+      name?: string
+    }
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    backendToken?: string
+    backendRefreshToken?: string
+    role?: string
+    id?: string
+  }
+}
+
 const handler = NextAuth({
   providers: [
-    // Google OAuth Provider
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
-    
-    // Credentials Provider untuk login email/password
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -55,7 +80,6 @@ const handler = NextAuth({
       
       if (account?.provider === "google") {
         try {
-          // Panggil backend Flask untuk verifikasi Google token
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/google/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -66,7 +90,6 @@ const handler = NextAuth({
           console.log("Backend response:", data)
           
           if (res.ok && data.success) {
-            // Simpan token backend ke user object
             user.backendToken = data.access_token
             user.backendRefreshToken = data.refresh_token
             user.id = data.user.id.toString()
@@ -79,12 +102,10 @@ const handler = NextAuth({
           return false
         }
       }
-      
       return true
     },
     
     async jwt({ token, user }) {
-      // Pindahkan data dari user ke token
       if (user) {
         token.backendToken = user.backendToken
         token.backendRefreshToken = user.backendRefreshToken
@@ -97,13 +118,14 @@ const handler = NextAuth({
     },
     
     async session({ session, token }) {
-      // Kirim data ke frontend
       session.backendToken = token.backendToken
       session.backendRefreshToken = token.backendRefreshToken
-      session.user.id = token.id as string
-      session.user.role = token.role as string
-      session.user.email = token.email as string
-      session.user.name = token.name as string
+      if (session.user) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.email = token.email as string
+        session.user.name = token.name as string
+      }
       return session
     }
   },
