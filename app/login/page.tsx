@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { signIn, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,53 +26,43 @@ const GoogleIcon = () => (
 export default function LoginPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
+  const { login, isLoading, user } = useAuth()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({ email: "", password: "" })
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
   useEffect(() => setMounted(true), [])
   
   useEffect(() => {
-    if (mounted && session) {
-      // Perbaiki: gunakan backendToken (bukan accessToken)
-      const backendToken = (session as any).backendToken
-      const backendRefreshToken = (session as any).backendRefreshToken
-      
-      if (backendToken) {
-        localStorage.setItem("access_token", backendToken)
-      }
-      if (backendRefreshToken) {
-        localStorage.setItem("refresh_token", backendRefreshToken)
+    if (mounted && (session || user)) {
+      if (session) {
+        // Simpan token dari NextAuth ke localStorage jika perlu
+        localStorage.setItem("access_token", (session as any).access_token)
       }
       router.push("/dashboard")
     }
-  }, [session, router, mounted])
+  }, [session, user, router, mounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    setIsLoading(true)
-
     if (!formData.email || !formData.password) {
       setError("Email dan password harus diisi")
-      setIsLoading(false)
       return
     }
-
-    const result = await signIn("credentials", {
-      email: formData.email,
-      password: formData.password,
-      redirect: false,
-    })
-
-    if (result?.error) {
-      setError("Login gagal. Periksa email dan password Anda.")
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      setError("Format email tidak valid")
+      return
     }
-    setIsLoading(false)
+    try {
+      await login(formData.email, formData.password)
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Login gagal")
+    }
   }
 
   const handleGoogleLogin = async () => {
@@ -79,6 +70,7 @@ export default function LoginPage() {
     try {
       await signIn("google", { callbackUrl: "/dashboard" })
     } catch (error) {
+      console.error("Google login error:", error)
       toast({
         title: "Gagal",
         description: "Gagal terhubung dengan Google",

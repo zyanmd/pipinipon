@@ -84,17 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Sending Google token to backend...")
       console.log("Token length:", idToken?.length)
       
-      const response = await googleAPI.loginWithGoogleToken(idToken)
+      // Panggil endpoint baru /google-login
+      const response = await googleAPI.googleLogin(idToken)
       
-      console.log("Raw response:", response)
-      console.log("Response data:", response?.data)
+      console.log("Response:", response?.data)
       
-      if (!response) {
-        throw new Error("No response from server - possible network error")
-      }
-      
-      if (!response.data) {
-        throw new Error("No data in response - backend error")
+      if (!response || !response.data) {
+        throw new Error("No response from server")
       }
       
       const { access_token, refresh_token, user: userData } = response.data
@@ -114,10 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       startTokenCheck()
       router.push("/dashboard")
     } catch (error: any) {
-      console.error("Google login error FULL:", error)
-      console.error("Error message:", error.message)
-      console.error("Error response:", error.response)
-      console.error("Error response data:", error.response?.data)
+      console.error("Google login error:", error.response?.data || error.message)
       throw error
     } finally {
       setIsLoading(false)

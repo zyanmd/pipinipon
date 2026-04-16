@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { signIn, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +12,6 @@ import { Label } from "@/components/ui/label"
 import { User, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/components/ui/use-toast"
-import { useAuth } from "@/lib/hooks/use-auth"
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -47,15 +47,13 @@ export default function RegisterPage() {
   useEffect(() => setMounted(true), [])
 
   useEffect(() => {
-    if (mounted && (user || session)) {
-      // Jika user dari AuthProvider atau session dari NextAuth ada, redirect ke dashboard
+    if (mounted && (session || user)) {
       if (session) {
-        localStorage.setItem("access_token", (session as any).backendToken)
-        localStorage.setItem("refresh_token", (session as any).backendRefreshToken)
+        localStorage.setItem("access_token", (session as any).access_token)
       }
       router.push("/dashboard")
     }
-  }, [user, session, router, mounted])
+  }, [session, user, router, mounted])
 
   const checkPasswordStrength = (password: string) => {
     setPasswordStrength({
@@ -96,6 +94,7 @@ export default function RegisterPage() {
     try {
       await signIn("google", { callbackUrl: "/dashboard" })
     } catch (error) {
+      console.error("Google register error:", error)
       toast({
         title: "Gagal",
         description: "Gagal terhubung dengan Google",

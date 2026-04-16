@@ -38,7 +38,6 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`
       }
     }
-    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`)
     return config
   },
   (error) => Promise.reject(error)
@@ -46,13 +45,8 @@ api.interceptors.request.use(
 
 // Response interceptor untuk handle token refresh
 api.interceptors.response.use(
-  (response) => {
-    console.log(`[API Response] ${response.config.url} - Status: ${response.status}`)
-    return response
-  },
+  (response) => response,
   async (error) => {
-    console.error(`[API Error] ${error.config?.url} - Status: ${error.response?.status}`, error.response?.data)
-    
     const originalRequest = error.config
     
     // Cegah infinite loop dan hanya handle 401
@@ -138,20 +132,19 @@ export const authAPI = {
 
 // ==================== GOOGLE OAUTH API ====================
 export const googleAPI = {
-  googleLogin: () => {
-    console.log('[Google API] Calling googleLogin')
-    return api.get('/auth/google/login')
+  // Endpoint baru untuk login dengan Google (popup)
+  googleLogin: (idToken: string) => {
+    console.log('[Google API] Calling googleLogin with token')
+    return api.post('/auth/google-login', { id_token: idToken })
   },
-  googleCallback: (code: string) => {
-    console.log('[Google API] Calling googleCallback with code:', code?.substring(0, 20))
-    return api.get('/auth/google/callback', { params: { code } })
-  },
+  
+  // Endpoint lama (backward compatibility)
   loginWithGoogleToken: (idToken: string) => {
-    console.log('[Google API] Calling loginWithGoogleToken')
-    console.log('[Google API] Token length:', idToken?.length)
-    console.log('[Google API] Token preview:', idToken?.substring(0, 50) + '...')
-    return api.post('/auth/google/token', { id_token: idToken })
+    console.log('[Google API] Calling loginWithGoogleToken (deprecated, use googleLogin)')
+    return api.post('/auth/google-login', { id_token: idToken })
   },
+  
+  // Link dan unlink Google account
   linkGoogle: (idToken: string) => {
     console.log('[Google API] Calling linkGoogle')
     return api.post('/auth/link-google', { id_token: idToken })
