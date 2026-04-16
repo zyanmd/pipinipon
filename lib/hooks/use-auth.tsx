@@ -2,8 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react"
 import { authAPI, userAPI, googleAPI } from "@/lib/api"
-import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
+import { useRouter, usePathname } from "next/navigation"
 
 interface User {
   id: number
@@ -41,40 +40,50 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const tokenCheckInterval = useRef<NodeJS.Timeout | null>(null)
 
-  // Sinkronkan user dari session NextAuth
+  // Handle callback URL dari Google (redirect method)
   useEffect(() => {
-    if (status === "authenticated" && session?.user) {
-      // Konversi session user ke format User
-      const sessionUser: User = {
-        id: parseInt(session.user.id || "0"),
-        username: session.user.username || session.user.name || "",
-        email: session.user.email || "",
-        avatar: session.user.avatar || null,
-        role: session.user.role || "user",
-        xp: 0,
-        rank: "",
-        streak: 0
-      }
-      setUser(sessionUser)
+    if (typeof window !== 'undefined' && pathname === '/auth/callback') {
+      const params = new URLSearchParams(window.location.search)
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      const userData = params.get('user')
+      const errorMsg = params.get('error')
       
-      // Simpan token ke localStorage jika ada
-      if ((session as any).backendToken) {
-        localStorage.setItem("access_token", (session as any).backendToken)
+      console.log("Callback detected - access_token:", !!accessToken)
+      console.log("Callback detected - error:", errorMsg)
+      
+      if (errorMsg) {
+        console.error("Callback error:", errorMsg)
+        router.replace('/login?error=' + encodeURIComponent(errorMsg))
+        return
       }
-      if ((session as any).backendRefreshToken) {
-        localStorage.setItem("refresh_token", (session as any).backendRefreshToken)
+      
+      if (accessToken && refreshToken) {
+        localStorage.setItem('access_token', accessToken)
+        localStorage.setItem('refresh_token', refreshToken)
+        console.log("Tokens saved from callback URL")
+        
+        if (userData) {
+          try {
+            const parsedUser = JSON.parse(decodeURIComponent(userData))
+            setUser(parsedUser)
+            console.log("User set from callback:", parsedUser.username)
+          } catch (e) {
+            console.error("Error parsing user data:", e)
+          }
+        }
+        
+        // Hapus query params dan redirect ke dashboard
+        router.replace('/dashboard')
+        return
       }
-    } else if (status === "unauthenticated") {
-      setUser(null)
-      localStorage.removeItem("access_token")
-      localStorage.removeItem("refresh_token")
     }
-  }, [session, status])
+  }, [pathname, router])
 
   const login = async (email: string, password: string) => {
     setIsLoading(true)
@@ -114,7 +123,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       console.log("Sending Google token to backend...")
-      console.log("Token length:", idToken?.length)
       
       const response = await googleAPI.googleLogin(idToken)
       
@@ -139,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       startTokenCheck()
-      // Jangan redirect di sini, biarkan useEffect dari useSession yang handle
+      router.push("/dashboard")
     } catch (error: any) {
       console.error("Google login error:", error.response?.data || error.message)
       throw error
@@ -236,16 +244,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Hanya fetch user jika tidak ada session dari NextAuth
   useEffect(() => {
-    if (status !== "loading" && !session) {
+    // Jangan fetch user di halaman callback (biar URL params yang handle)
+    if (pathname !== '/auth/callback') {
       fetchUser()
-    } else if (status === "loading") {
-      setIsLoading(true)
     } else {
       setIsLoading(false)
     }
-  }, [fetchUser, session, status])
+  }, [fetchUser, pathname])
 
   return (
     <AuthContext.Provider value={{ 
