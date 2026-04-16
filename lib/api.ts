@@ -38,6 +38,7 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`
       }
     }
+    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`)
     return config
   },
   (error) => Promise.reject(error)
@@ -45,8 +46,13 @@ api.interceptors.request.use(
 
 // Response interceptor untuk handle token refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`[API Response] ${response.config.url} - Status: ${response.status}`)
+    return response
+  },
   async (error) => {
+    console.error(`[API Error] ${error.config?.url} - Status: ${error.response?.status}`, error.response?.data)
+    
     const originalRequest = error.config
     
     // Cegah infinite loop dan hanya handle 401
@@ -132,16 +138,26 @@ export const authAPI = {
 
 // ==================== GOOGLE OAUTH API ====================
 export const googleAPI = {
-  // Endpoint baru untuk login dengan Google (popup)
+  // Endpoint untuk mendapatkan URL login Google (redirect method)
+  getGoogleLoginUrl: () => {
+    console.log('[Google API] Getting Google login URL')
+    return api.get('/auth/google/login')
+  },
+  
+  // Endpoint untuk login dengan token (popup method)
   googleLogin: (idToken: string) => {
-    console.log('[Google API] Calling googleLogin with token')
+    console.log('[Google API] Calling googleLogin with token, length:', idToken?.length)
+    if (!idToken) {
+      console.error('[Google API] No token provided!')
+      return Promise.reject(new Error('No token provided'))
+    }
     return api.post('/auth/google-login', { id_token: idToken })
   },
   
-  // Endpoint lama (backward compatibility)
+  // Alias untuk backward compatibility
   loginWithGoogleToken: (idToken: string) => {
-    console.log('[Google API] Calling loginWithGoogleToken (deprecated, use googleLogin)')
-    return api.post('/auth/google-login', { id_token: idToken })
+    console.log('[Google API] Calling loginWithGoogleToken (alias)')
+    return googleAPI.googleLogin(idToken)
   },
   
   // Link dan unlink Google account
