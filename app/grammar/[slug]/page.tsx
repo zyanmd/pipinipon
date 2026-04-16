@@ -148,7 +148,7 @@ export default function GrammarDetailPage() {
         }
         canonical.setAttribute('href', `https://www.pipinipon.web.id/grammar/${slug}`)
         
-        // Schema.org untuk grammar lesson
+        // Schema.org untuk grammar lesson - PERBAIKI
         let scriptSchema = document.querySelector('#grammar-schema')
         if (!scriptSchema) {
           scriptSchema = document.createElement('script')
@@ -157,7 +157,34 @@ export default function GrammarDetailPage() {
           document.head.appendChild(scriptSchema)
         }
         
-        const schemaData = {
+        // Parse example sentences for citation
+        let exampleSentencesList: any[] = []
+        if (grammarData.example_sentences) {
+          try {
+            const parsed = typeof grammarData.example_sentences === 'string' 
+              ? JSON.parse(grammarData.example_sentences) 
+              : grammarData.example_sentences
+            if (Array.isArray(parsed)) {
+              exampleSentencesList = parsed
+            }
+          } catch (e) {
+            console.error("Error parsing example sentences:", e)
+          }
+        }
+        
+        // Buat citation items
+        const citationItems = exampleSentencesList.slice(0, 3).map((sentence: any, idx: number) => ({
+          "@type": "CreativeWork",
+          "name": `Contoh Kalimat ${idx + 1}`,
+          "text": sentence.japanese,
+          "inLanguage": "ja",
+          "about": {
+            "@type": "Thing",
+            "name": sentence.indonesian
+          }
+        }))
+        
+        const schemaData: any = {
           "@context": "https://schema.org",
           "@type": "LearningResource",
           "name": grammarData.title,
@@ -193,30 +220,26 @@ export default function GrammarDetailPage() {
           "isAccessibleForFree": true,
           "image": thumbnailFullUrl,
           "mainEntityOfPage": `https://www.pipinipon.web.id/grammar/${slug}`,
-          "keywords": `${grammarData.title}, JLPT ${grammarData.level}, tata bahasa Jepang, grammar Jepang, belajar Jepang`,
-          "citation": [
-            {
-              "@type": "CreativeWork",
-              "name": "Contoh Kalimat",
-              "text": grammarData.example_sentences
-            }
-          ]
+          "keywords": `${grammarData.title}, JLPT ${grammarData.level}, tata bahasa Jepang, grammar Jepang, belajar Jepang`
+        }
+        
+        // Add citation if available
+        if (citationItems.length > 0) {
+          schemaData.citation = citationItems
         }
         
         // Add aggregate rating if view_count > 0
         if (grammarData.view_count > 0) {
-          Object.assign(schemaData, {
-            "aggregateRating": {
-              "@type": "AggregateRating",
-              "ratingValue": "4.8",
-              "ratingCount": Math.min(grammarData.view_count, 1000),
-              "bestRating": "5",
-              "worstRating": "1"
-            }
-          })
+          schemaData.aggregateRating = {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "ratingCount": Math.min(grammarData.view_count, 1000),
+            "bestRating": "5",
+            "worstRating": "1"
+          }
         }
         
-        scriptSchema.textContent = JSON.stringify(schemaData)
+        scriptSchema.textContent = JSON.stringify(schemaData, null, 2)
         
         // Breadcrumb schema
         let breadcrumbSchema = document.querySelector('#breadcrumb-schema')
@@ -251,7 +274,7 @@ export default function GrammarDetailPage() {
             }
           ]
         }
-        breadcrumbSchema.textContent = JSON.stringify(breadcrumbData)
+        breadcrumbSchema.textContent = JSON.stringify(breadcrumbData, null, 2)
         
         // Check if grammar is bookmarked by user
         if (user) {
@@ -290,7 +313,6 @@ export default function GrammarDetailPage() {
     setIsBookmarking(true)
     try {
       if (isBookmarked) {
-        // Get favorite ID first
         const favoritesRes = await bookmarkAPI.getGrammarFavorites()
         const favorite = favoritesRes.data.data.favorites.find(
           (f: any) => f.grammar_id === grammar.id
