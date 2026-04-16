@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, isLoading: authLoading } = useAuth()
   const { toast } = useToast()
   const [masteredCount, setMasteredCount] = useState(0)
   const [totalStudied, setTotalStudied] = useState(0)
@@ -71,7 +71,10 @@ export default function DashboardPage() {
   // Fetch dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!user) return
+      if (!user) {
+        setLoading(false)
+        return
+      }
       
       try {
         const [progressResponse, statsResponse, streakResponse] = await Promise.all([
@@ -184,7 +187,8 @@ export default function DashboardPage() {
     return { mastered: 0, total: 0, percentage: 0 }
   }
 
-  if (loading) {
+  // Loading state
+  if (authLoading || loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -202,6 +206,23 @@ export default function DashboardPage() {
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-64 w-full" />
         </div>
+      </div>
+    )
+  }
+
+  // Jika user tidak login
+  if (!user) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Card>
+          <CardContent className="pt-6 text-center">
+            <h2 className="text-xl font-semibold mb-2">Silakan Login</h2>
+            <p className="text-muted-foreground mb-4">Anda harus login untuk melihat dashboard</p>
+            <Link href="/login">
+              <Button variant="japanese">Login</Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -304,7 +325,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Calendar Streak Section - tanpa reminder */}
+      {/* Calendar Streak Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

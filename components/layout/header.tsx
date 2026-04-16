@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "./theme-toggle"
@@ -54,7 +55,8 @@ const adminNavItem = { href: "/admin", label: "Admin", icon: Shield }
 export function Header() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout, isLoading } = useAuth()
+  const { data: session, status } = useSession()
+  const { user, logout, isLoading } = useAuth()  // <-- TAMBAHKAN isLoading
   const { theme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [isIphoneMode, setIsIphoneMode] = useState(false)
@@ -71,7 +73,10 @@ export function Header() {
   const avatarDropdownRef = useRef<HTMLDivElement>(null)
   const { scrollY } = useScroll()
 
-  const isAdmin = user?.role === "admin"
+  // Gunakan user dari session atau AuthProvider dengan type assertion
+  const currentUser = (session?.user as any) || user
+  const isLoggedIn = status === "authenticated" || !!user
+  const isAdmin = currentUser?.role === "admin"
 
   useEffect(() => {
     setMounted(true)
@@ -99,7 +104,7 @@ export function Header() {
   }, [])
 
   const fetchNotifications = useCallback(async () => {
-    if (!user) return
+    if (!isLoggedIn) return
     
     setFetchError(false)
     
@@ -142,10 +147,10 @@ export function Header() {
       setRecentMentions([])
       setRecentReplies([])
     }
-  }, [user])
+  }, [isLoggedIn])
 
   useEffect(() => {
-    if (user) {
+    if (isLoggedIn) {
       const timer = setTimeout(() => {
         fetchNotifications()
       }, 1000)
@@ -159,7 +164,7 @@ export function Header() {
         clearInterval(interval)
       }
     }
-  }, [fetchNotifications, user])
+  }, [fetchNotifications, isLoggedIn])
 
   const handleMarkMentionAsRead = async (mentionId: number, event?: React.MouseEvent) => {
     if (event) event.stopPropagation()
@@ -203,9 +208,9 @@ export function Header() {
     setShowNotificationPopup(false)
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/login" })
     logout()
-    router.push("/login")
     setMobileMenuOpen(false)
     setAvatarDropdownOpen(false)
   }
@@ -224,7 +229,6 @@ export function Header() {
 
   return (
     <>
-      {/* Header container dengan efek sticky dan iPhone mode */}
       <div className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-500",
         isIphoneMode ? "px-4 pt-4" : "bg-background border-b border-border"
@@ -255,7 +259,7 @@ export function Header() {
             </Link>
 
             {/* Navigation - Desktop */}
-            {user && (
+            {isLoggedIn && (
               <nav className="hidden lg:flex items-center justify-center space-x-1 flex-1 mx-4">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
@@ -300,7 +304,7 @@ export function Header() {
             <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
               <ThemeToggle />
               
-              {user && (
+              {isLoggedIn && currentUser && (
                 <>
                   {/* Notification Bell */}
                   <div className="relative" ref={popupRef}>
@@ -581,17 +585,17 @@ export function Header() {
                         {/* User Info Section */}
                         <div className="flex items-center gap-3 p-4 mb-3 rounded-xl bg-muted/30">
                           <Avatar className="h-12 w-12 ring-2 ring-border/50 flex-shrink-0">
-                            <AvatarImage src={getAvatarUrl(user.avatar)} alt={user.username} />
+                            <AvatarImage src={getAvatarUrl(currentUser.avatar)} alt={currentUser.username} />
                             <AvatarFallback className="bg-gradient-to-br from-japanese-500 to-japanese-600 text-white">
-                              {user.username?.charAt(0).toUpperCase()}
+                              {currentUser.username?.charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-sm truncate">{user.username}</p>
-                              {(user as any).verified_badge === 1 && <VerifiedBadge size="sm" />}
+                              <p className="font-semibold text-sm truncate">{currentUser.username}</p>
+                              {(currentUser as any).verified_badge === 1 && <VerifiedBadge size="sm" />}
                             </div>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{currentUser.email}</p>
                           </div>
                         </div>
                         
@@ -638,7 +642,7 @@ export function Header() {
                         
                         {/* Settings and Profile */}
                         <SheetClose asChild>
-                          <Link href={`/profile/${user.username}`}>
+                          <Link href={`/profile/${currentUser.username}`}>
                             <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl h-11">
                               <User className="h-5 w-5 flex-shrink-0" />
                               Profil
@@ -682,11 +686,11 @@ export function Header() {
                     >
                       <Avatar className="h-9 w-9 ring-2 ring-border/50">
                         <AvatarImage
-                          src={getAvatarUrl(user.avatar)}
-                          alt={user.username}
+                          src={getAvatarUrl(currentUser.avatar)}
+                          alt={currentUser.username}
                         />
                         <AvatarFallback className="bg-gradient-to-br from-japanese-500 to-japanese-600 text-white">
-                          {user.username?.charAt(0).toUpperCase()}
+                          {currentUser.username?.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                     </button>
@@ -702,17 +706,17 @@ export function Header() {
                         >
                           <div className="px-3 py-3 border-b border-border/50">
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold leading-none">{user.username}</p>
-                              {(user as any).verified_badge === 1 && <VerifiedBadge size="sm" />}
+                              <p className="text-sm font-semibold leading-none">{currentUser.username}</p>
+                              {(currentUser as any).verified_badge === 1 && <VerifiedBadge size="sm" />}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1.5 truncate">
-                              {user.email}
+                              {currentUser.email}
                             </p>
                           </div>
 
                           <div className="p-1.5">
                             <Link
-                              href={`/profile/${user.username}`}
+                              href={`/profile/${currentUser.username}`}
                               onClick={() => setAvatarDropdownOpen(false)}
                               className="flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-xl hover:bg-muted/60 transition-colors duration-150"
                             >
@@ -749,7 +753,7 @@ export function Header() {
                 </>
               )}
               
-              {!user && !isLoading && (
+              {!isLoggedIn && !isLoading && (
                 <div className="flex items-center space-x-2">
                   <Link href="/login">
                     <Button 
@@ -782,7 +786,7 @@ export function Header() {
         </div>
       </div>
 
-      {/* Spacer untuk konten agar tidak tertutup header fixed */}
+      {/* Spacer */}
       <div className="h-16" />
     </>
   )
