@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { signIn, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { User, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/components/ui/use-toast"
-import { googleAPI } from "@/lib/api"
+import { useAuth } from "@/lib/hooks/use-auth"
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -24,6 +24,7 @@ const GoogleIcon = () => (
 
 export default function RegisterPage() {
   const router = useRouter()
+  const { data: session } = useSession()
   const { register, isLoading, user } = useAuth()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
@@ -43,15 +44,18 @@ export default function RegisterPage() {
     letter: false,
   })
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
-    if (mounted && user) {
+    if (mounted && (user || session)) {
+      // Jika user dari AuthProvider atau session dari NextAuth ada, redirect ke dashboard
+      if (session) {
+        localStorage.setItem("access_token", (session as any).backendToken)
+        localStorage.setItem("refresh_token", (session as any).backendRefreshToken)
+      }
       router.push("/dashboard")
     }
-  }, [user, router, mounted])
+  }, [user, session, router, mounted])
 
   const checkPasswordStrength = (password: string) => {
     setPasswordStrength({
@@ -90,16 +94,14 @@ export default function RegisterPage() {
   const handleGoogleRegister = async () => {
     setIsGoogleLoading(true)
     try {
-      const response = await googleAPI.googleLogin()
-      const authUrl = response.data.auth_url
-      window.location.href = authUrl
-    } catch (error: any) {
-      console.error("Google register error:", error)
+      await signIn("google", { callbackUrl: "/dashboard" })
+    } catch (error) {
       toast({
         title: "Gagal",
-        description: error.response?.data?.error || "Gagal mendaftar dengan Google",
+        description: "Gagal terhubung dengan Google",
         variant: "destructive",
       })
+    } finally {
       setIsGoogleLoading(false)
     }
   }
@@ -107,9 +109,7 @@ export default function RegisterPage() {
   const isPasswordValid = passwordStrength.length && passwordStrength.number && passwordStrength.letter
   const isFormValid = isPasswordValid && formData.password === formData.confirmPassword && formData.password !== ""
 
-  if (!mounted) {
-    return null
-  }
+  if (!mounted) return null
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-background via-background to-muted/20">

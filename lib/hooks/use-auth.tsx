@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react"
 import { authAPI, userAPI, googleAPI } from "@/lib/api"
+import { useRouter } from "next/navigation"
 
 interface User {
   id: number
@@ -32,12 +33,13 @@ interface AuthContextType {
   fetchUser: () => Promise<void>
   updateUser: (data: Partial<User>) => void
   checkToken: () => Promise<boolean>
-  setUser: (user: User | null) => void  // TAMBAHKAN INI
+  setUser: (user: User | null) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const tokenCheckInterval = useRef<NodeJS.Timeout | null>(null)
@@ -50,8 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("access_token", access_token)
       localStorage.setItem("refresh_token", refresh_token)
       setUser(user)
-      
       startTokenCheck()
+      router.push("/dashboard")
     } catch (error) {
       throw error
     } finally {
@@ -67,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("access_token", access_token)
       localStorage.setItem("refresh_token", refresh_token)
       setUser(user)
-      
       startTokenCheck()
+      router.push("/dashboard")
     } catch (error) {
       throw error
     } finally {
@@ -79,14 +81,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async (idToken: string) => {
     setIsLoading(true)
     try {
+      console.log("Sending Google token to backend...")
+      console.log("Token length:", idToken?.length)
+      
       const response = await googleAPI.loginWithGoogleToken(idToken)
-      const { access_token, refresh_token, user } = response.data
+      
+      console.log("Raw response:", response)
+      console.log("Response data:", response?.data)
+      
+      if (!response) {
+        throw new Error("No response from server - possible network error")
+      }
+      
+      if (!response.data) {
+        throw new Error("No data in response - backend error")
+      }
+      
+      const { access_token, refresh_token, user: userData } = response.data
+      
+      if (!access_token) {
+        throw new Error("No access token received")
+      }
+      
       localStorage.setItem("access_token", access_token)
-      localStorage.setItem("refresh_token", refresh_token)
-      setUser(user)
+      if (refresh_token) {
+        localStorage.setItem("refresh_token", refresh_token)
+      }
+      if (userData) {
+        setUser(userData)
+      }
       
       startTokenCheck()
-    } catch (error) {
+      router.push("/dashboard")
+    } catch (error: any) {
+      console.error("Google login error FULL:", error)
+      console.error("Error message:", error.message)
+      console.error("Error response:", error.response)
+      console.error("Error response data:", error.response?.data)
       throw error
     } finally {
       setIsLoading(false)
@@ -102,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("access_token")
     localStorage.removeItem("refresh_token")
     setUser(null)
+    router.push("/login")
   }
 
   const fetchUser = useCallback(async () => {
@@ -155,7 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const refreshToken = localStorage.getItem("refresh_token")
           if (!refreshToken) {
-            throw new Error("No refresh token")
+            console.log("No refresh token, logging out...")
+            logout()
+            return
           }
           
           const response = await authAPI.refresh()
@@ -165,12 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (refreshError) {
           console.error("Failed to refresh token, logging out...")
           logout()
-          if (typeof window !== "undefined") {
-            window.location.href = "/login"
-          }
         }
       }
-    }, 3600000) // 1 jam
+    }, 3600000)
   }
 
   useEffect(() => {
@@ -196,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchUser, 
       updateUser, 
       checkToken,
-      setUser  // TAMBAHKAN INI
+      setUser
     }}>
       {children}
     </AuthContext.Provider>

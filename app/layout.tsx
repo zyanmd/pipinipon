@@ -7,8 +7,8 @@ import { AuthProvider } from "@/lib/hooks/use-auth"
 import { FloatingChat } from "@/components/chat/floating-chat"
 import Link from "next/link"
 import { Globe } from "lucide-react"
-import { GoogleOAuthProvider } from "@react-oauth/google"
 import { Suspense } from "react"
+import { Providers } from "./providers/SessionProvider"
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────
 const outfit = Outfit({
@@ -315,9 +315,6 @@ function LoadingFallback() {
   )
 }
 
-// Google Client ID - GANTI DENGAN CLIENT ID ASLI ANDA
-const GOOGLE_CLIENT_ID = "YOUR_ACTUAL_GOOGLE_CLIENT_ID_HERE"
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -340,13 +337,13 @@ export default function RootLayout({
         className={`${outfit.variable} ${noto.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <Providers>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
             <AuthProvider>
               <a
                 href="#main-content"
@@ -444,8 +441,8 @@ export default function RootLayout({
                 />
               </div>
             </AuthProvider>
-          </GoogleOAuthProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </Providers>
       </body>
     </html>
   )

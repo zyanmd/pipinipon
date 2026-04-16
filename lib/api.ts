@@ -8,7 +8,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 detik timeout
+  timeout: 30000,
 })
 
 // Flag untuk mencegah multiple refresh requests
@@ -32,13 +32,13 @@ const processQueue = (error: any = null) => {
 // Request interceptor untuk menambahkan token
 api.interceptors.request.use(
   (config) => {
-    // Hanya di client side
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('access_token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
     }
+    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`)
     return config
   },
   (error) => Promise.reject(error)
@@ -46,15 +46,19 @@ api.interceptors.request.use(
 
 // Response interceptor untuk handle token refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`[API Response] ${response.config.url} - Status: ${response.status}`)
+    return response
+  },
   async (error) => {
+    console.error(`[API Error] ${error.config?.url} - Status: ${error.response?.status}`, error.response?.data)
+    
     const originalRequest = error.config
     
-    // Cegah infinite loop
+    // Cegah infinite loop dan hanya handle 401
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       
-      // Hanya di client side
       if (typeof window !== 'undefined') {
         // Jika sedang refreshing, queue request
         if (isRefreshing) {
@@ -70,7 +74,13 @@ api.interceptors.response.use(
         try {
           const refreshToken = localStorage.getItem('refresh_token')
           if (!refreshToken) {
-            throw new Error('No refresh token')
+            console.warn('No refresh token available, redirecting to login')
+            localStorage.removeItem('access_token')
+            localStorage.removeItem('refresh_token')
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+              window.location.href = '/login'
+            }
+            return
           }
           
           const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
@@ -78,21 +88,22 @@ api.interceptors.response.use(
           })
           
           const { access_token } = response.data
-          localStorage.setItem('access_token', access_token)
-          
-          // Update header untuk request yang pending
-          originalRequest.headers.Authorization = `Bearer ${access_token}`
-          
-          // Proses queue
-          processQueue()
-          
-          return api(originalRequest)
+          if (access_token) {
+            localStorage.setItem('access_token', access_token)
+            originalRequest.headers.Authorization = `Bearer ${access_token}`
+            processQueue()
+            return api(originalRequest)
+          } else {
+            throw new Error('Refresh response missing access_token')
+          }
         } catch (refreshError) {
-          // Refresh failed, redirect to login
+          console.error('Refresh token failed:', refreshError)
           processQueue(refreshError)
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
-          window.location.href = '/login'
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            window.location.href = '/login'
+          }
           return Promise.reject(refreshError)
         } finally {
           isRefreshing = false
@@ -114,43 +125,41 @@ export const authAPI = {
   getMe: () => api.get('/auth/me'),
   logout: () => api.post('/auth/logout'),
   verifyToken: () => api.post('/auth/verify-token'),
-  
-  // Forgot Password dengan OTP
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
-  
-  // Verifikasi OTP untuk reset password
   verifyResetOtp: (email: string, otp: string) => 
     api.post('/auth/verify-reset-otp', { email, otp }),
-  
-  // Reset password dengan token
   resetPassword: (token: string, newPassword: string) => 
     api.post('/auth/reset-password', { token, new_password: newPassword }),
-  
-  // Change password (authenticated)
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword }),
-  
-  // Email verification
   sendVerification: (email?: string) => api.post('/auth/send-verification', { email }),
   verifyEmail: (code: string, email?: string) => api.post('/auth/verify-email', { code, email }),
 }
 
 // ==================== GOOGLE OAUTH API ====================
 export const googleAPI = {
-  // Get Google OAuth login URL
-  googleLogin: () => api.get('/auth/google/login'),
-  
-  // Handle Google OAuth callback
-  googleCallback: (code: string) => api.get('/auth/google/callback', { params: { code } }),
-  
-  // Login with Google ID token (untuk mobile/web with Google Sign-In)
-  loginWithGoogleToken: (idToken: string) => api.post('/auth/google/token', { id_token: idToken }),
-  
-  // Link Google account to existing user (authenticated)
-  linkGoogle: (idToken: string) => api.post('/auth/link-google', { id_token: idToken }),
-  
-  // Unlink Google account from current user (authenticated)
-  unlinkGoogle: () => api.post('/auth/unlink-google'),
+  googleLogin: () => {
+    console.log('[Google API] Calling googleLogin')
+    return api.get('/auth/google/login')
+  },
+  googleCallback: (code: string) => {
+    console.log('[Google API] Calling googleCallback with code:', code?.substring(0, 20))
+    return api.get('/auth/google/callback', { params: { code } })
+  },
+  loginWithGoogleToken: (idToken: string) => {
+    console.log('[Google API] Calling loginWithGoogleToken')
+    console.log('[Google API] Token length:', idToken?.length)
+    console.log('[Google API] Token preview:', idToken?.substring(0, 50) + '...')
+    return api.post('/auth/google/token', { id_token: idToken })
+  },
+  linkGoogle: (idToken: string) => {
+    console.log('[Google API] Calling linkGoogle')
+    return api.post('/auth/link-google', { id_token: idToken })
+  },
+  unlinkGoogle: () => {
+    console.log('[Google API] Calling unlinkGoogle')
+    return api.post('/auth/unlink-google')
+  },
 }
 
 // ==================== VOCABULARY API ====================
@@ -175,8 +184,6 @@ export const vocabAPI = {
   getMasteredStats: () => api.get('/vocab/mastered-stats'),
   search: (q: string, page?: number, per_page?: number) =>
     api.get('/vocab/search', { params: { q, page, per_page } }),
-  
-  // Writing Practice (NEW)
   getWritingPractice: (level?: string, limit?: number) => {
     const params = new URLSearchParams()
     if (level) params.append('level', level)
@@ -185,8 +192,6 @@ export const vocabAPI = {
   },
   submitWritingPractice: (data: { vocab_id: number; user_writing: string; is_correct: boolean }) =>
     api.post('/vocab/writing-practice/submit', data),
-  
-  // Admin only
   create: (data: any) => api.post('/vocab/', data),
   update: (id: number, data: any) => api.put(`/vocab/${id}`, data),
   delete: (id: number) => api.delete(`/vocab/${id}`),
@@ -194,7 +199,6 @@ export const vocabAPI = {
 
 // ==================== GRAMMAR API ====================
 export const grammarAPI = {
-  // Public endpoints
   getAll: (params?: {
     page?: number
     per_page?: number
@@ -213,7 +217,6 @@ export const grammarAPI = {
 
 // ==================== ADMIN GRAMMAR API ====================
 export const adminGrammarAPI = {
-  // Admin endpoints (with /admin prefix)
   getAll: (params?: {
     page?: number
     per_page?: number
@@ -227,8 +230,6 @@ export const adminGrammarAPI = {
   delete: (id: number) => api.delete(`/grammar/admin/${id}`),
   publish: (id: number, isPublished: boolean) => 
     api.patch(`/grammar/admin/${id}/publish`, { is_published: isPublished ? 1 : 0 }),
-  
-  // Thumbnail upload (NEW - sesuai dengan routes grammar)
   uploadThumbnail: (file: File) => {
     const formData = new FormData()
     formData.append('thumbnail', file)
@@ -242,7 +243,6 @@ export const adminGrammarAPI = {
 
 // ==================== STUDY API ====================
 export const studyAPI = {
-  // Study progress
   getProgress: () => api.get('/study/progress'),
   getProgressByVocab: (vocabId: number) => api.get(`/study/progress/${vocabId}`),
   updateProgress: (data: { vocab_id: number; is_correct: boolean }) =>
@@ -250,36 +250,23 @@ export const studyAPI = {
   resetProgress: (vocabId: number) => api.post(`/study/progress/${vocabId}/reset`),
   markMastered: (vocabId: number, mastered: boolean) =>
     api.post(`/study/progress/${vocabId}/mastered`, { mastered }),
-  
-  // Statistics
   getStats: () => api.get('/study/stats'),
   getStatsByLevel: () => api.get('/study/stats/by-level'),
-  
-  // Recommendations & Dashboard
   getRecommendations: (params?: { limit?: number; level?: string }) =>
     api.get('/study/recommendations', { params }),
   getDashboard: () => api.get('/study/dashboard'),
-  
-  // Streak
   getStreak: () => api.get('/study/streak'),
   getStreakCalendar: () => api.get('/study/streak-calendar'),
-  
-  // Reminder
   getReminderSettings: () => api.get('/study/reminder/settings'),
   updateReminderSettings: (data: { enabled: boolean; time?: string }) =>
     api.post('/study/reminder/settings', data),
   sendReminderNow: () => api.post('/study/reminder/send-now'),
-  
-  // Legacy (deprecated)
   sendReminder: () => api.post('/study/send-reminder'),
 }
 
 // ==================== CHAT API ====================
 export const chatAPI = {
-  // Chat info
   getInfo: () => api.get('/chat/info'),
-  
-  // Messages
   getMessages: (params?: {
     page?: number
     per_page?: number
@@ -292,28 +279,18 @@ export const chatAPI = {
   editMessage: (messageId: number, message: string) =>
     api.put(`/chat/messages/${messageId}`, { message }),
   deleteMessage: (messageId: number) => api.delete(`/chat/messages/${messageId}`),
-  
-  // Mentions
   getMentions: (params?: { is_read?: number; page?: number; per_page?: number }) =>
     api.get('/chat/mentions', { params }),
   markMentionRead: (mentionId: number) => api.patch(`/chat/mentions/${mentionId}/read`),
   markAllMentionsRead: () => api.post('/chat/mentions/read-all'),
-  
-  // Reply Notifications
   getReplyNotifications: (params?: { is_read?: number; page?: number; per_page?: number }) =>
     api.get('/chat/reply-notifications', { params }),
   markReplyNotificationRead: (notifId: number) => 
     api.patch(`/chat/reply-notifications/${notifId}/read`),
   markAllReplyNotificationsRead: () => 
     api.post('/chat/reply-notifications/read-all'),
-  
-  // Summary
   getNotificationSummary: () => api.get('/chat/notifications/summary'),
-  
-  // Mark all as read
   markAllAsRead: () => api.post('/chat/read-all'),
-  
-  // Search users
   searchUsers: (q: string) => api.get('/chat/users/search', { params: { q } }),
 }
 
@@ -353,7 +330,6 @@ export const categoryAPI = {
   getById: (id: number) => api.get(`/categories/${id}`),
   getBySlug: (slug: string) => api.get(`/categories/by-slug/${slug}`),
   getWithCount: () => api.get('/categories/with-count'),
-  // Admin only
   create: (data: { name: string; slug?: string }) => api.post('/categories/', data),
   update: (id: number, data: { name?: string; slug?: string }) => 
     api.put(`/categories/${id}`, data),
@@ -362,7 +338,6 @@ export const categoryAPI = {
 
 // ==================== BOOKMARK API ====================
 export const bookmarkAPI = {
-  // Vocabulary bookmarks
   getVocabBookmarks: () => api.get('/bookmarks/vocab'),
   addVocabBookmark: (vocabId: number, notes?: string) =>
     api.post('/bookmarks/vocab', { vocab_id: vocabId, notes }),
@@ -372,8 +347,6 @@ export const bookmarkAPI = {
     api.delete(`/bookmarks/vocab/${bookmarkId}`),
   checkVocabBookmark: (vocabId: number) =>
     api.get(`/bookmarks/vocab/check/${vocabId}`),
-  
-  // Grammar favorites
   getGrammarFavorites: () => api.get('/bookmarks/grammar'),
   addGrammarFavorite: (grammarId: number) =>
     api.post('/bookmarks/grammar', { grammar_id: grammarId }),
@@ -381,14 +354,11 @@ export const bookmarkAPI = {
     api.delete(`/bookmarks/grammar/${favoriteId}`),
   checkGrammarFavorite: (grammarId: number) =>
     api.get(`/bookmarks/grammar/check/${grammarId}`),
-  
-  // Stats
   getStats: () => api.get('/bookmarks/stats'),
 }
 
 // ==================== ADMIN API ====================
 export const adminAPI = {
-  // User management
   getUsers: (params?: { page?: number; per_page?: number; search?: string; role?: string; is_verified?: number }) =>
     api.get('/admin/users', { params }),
   getUserByUsername: (username: string) => api.get(`/admin/users/${username}`),
@@ -396,18 +366,12 @@ export const adminAPI = {
   deleteUser: (username: string) => api.delete(`/admin/users/${username}`),
   changeUserRole: (username: string, role: string) => 
     api.patch(`/admin/users/${username}/role`, { role }),
-  
-  // Statistics
   getStats: () => api.get('/admin/stats'),
-  
-  // Vocabulary management
   getVocab: (params?: { page?: number; per_page?: number; search?: string; jlpt_level?: string }) =>
     api.get('/admin/vocab', { params }),
   createVocab: (data: any) => api.post('/admin/vocab', data),
   updateVocab: (id: number, data: any) => api.put(`/admin/vocab/${id}`, data),
   deleteVocab: (id: number) => api.delete(`/admin/vocab/${id}`),
-  
-  // Grammar management (menggunakan adminGrammarAPI untuk konsistensi)
   getGrammar: (params?: { page?: number; per_page?: number; level?: string; category?: string; is_published?: number }) =>
     adminGrammarAPI.getAll(params),
   getGrammarById: (id: number) => adminGrammarAPI.getById(id),
@@ -415,19 +379,13 @@ export const adminAPI = {
   updateGrammar: (id: number, data: any) => adminGrammarAPI.update(id, data),
   deleteGrammar: (id: number) => adminGrammarAPI.delete(id),
   publishGrammar: (id: number, isPublished: boolean) => adminGrammarAPI.publish(id, isPublished),
-  
-  // Grammar Thumbnail (menggunakan adminGrammarAPI)
   uploadGrammarThumbnail: (file: File) => adminGrammarAPI.uploadThumbnail(file),
   deleteGrammarThumbnail: (filename: string) => adminGrammarAPI.deleteThumbnail(filename),
-  
-  // Category management
   getCategories: () => api.get('/admin/categories'),
   createCategory: (data: { name: string; slug?: string }) => api.post('/admin/categories', data),
   updateCategory: (id: number, data: { name?: string; slug?: string }) => 
     api.put(`/admin/categories/${id}`, data),
   deleteCategory: (id: number) => api.delete(`/admin/categories/${id}`),
-  
-  // Streak & Reminder admin endpoints
   checkStreaks: () => api.post('/admin/check-streaks'),
   checkReminders: () => api.post('/admin/check-reminders'),
 }
@@ -442,13 +400,8 @@ export const getImageUrl = (path: string | null | undefined, type: 'avatar' | 'c
   
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
   
-  // Jika sudah URL lengkap
   if (path.startsWith('http')) return path
-  
-  // Jika sudah mengandung folder
   if (path.includes('uploads/')) return `${baseUrl}/${path}`
-  
-  // Tambahkan folder berdasarkan tipe
   if (type === 'avatar') return `${baseUrl}/uploads/avatars/${path}`
   if (type === 'cover') return `${baseUrl}/uploads/covers/${path}`
   if (type === 'grammar') return `${baseUrl}/uploads/grammar/${path}`
@@ -456,21 +409,16 @@ export const getImageUrl = (path: string | null | undefined, type: 'avatar' | 'c
   return `${baseUrl}/uploads/${path}`
 }
 
-// Helper untuk mendapatkan URL thumbnail grammar
 export const getGrammarThumbnailUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/default-grammar.jpg'
   
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
   
-  // Jika sudah URL lengkap
   if (thumbnail.startsWith('http')) return thumbnail
-  
-  // Jika sudah mengandung folder grammar/
   if (thumbnail.includes('grammar/')) {
     return `${baseUrl}/${thumbnail}`
   }
   
-  // Default: tambahkan folder grammar
   return `${baseUrl}/uploads/grammar/${thumbnail}`
 }
 

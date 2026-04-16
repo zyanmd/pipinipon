@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { signIn, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +12,6 @@ import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, Sparkles } from "lucide-re
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
-import { googleAPI } from "@/lib/api"
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -25,74 +24,75 @@ const GoogleIcon = () => (
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isLoading, user } = useAuth()
+  const { data: session, status } = useSession()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  })
+  const [formData, setFormData] = useState({ email: "", password: "" })
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
+  useEffect(() => setMounted(true), [])
+  
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (mounted && user) {
+    if (mounted && session) {
+      // Perbaiki: gunakan backendToken (bukan accessToken)
+      const backendToken = (session as any).backendToken
+      const backendRefreshToken = (session as any).backendRefreshToken
+      
+      if (backendToken) {
+        localStorage.setItem("access_token", backendToken)
+      }
+      if (backendRefreshToken) {
+        localStorage.setItem("refresh_token", backendRefreshToken)
+      }
       router.push("/dashboard")
     }
-  }, [user, router, mounted])
+  }, [session, router, mounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setIsLoading(true)
 
     if (!formData.email || !formData.password) {
       setError("Email dan password harus diisi")
+      setIsLoading(false)
       return
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      setError("Format email tidak valid")
-      return
-    }
+    const result = await signIn("credentials", {
+      email: formData.email,
+      password: formData.password,
+      redirect: false,
+    })
 
-    try {
-      await login(formData.email, formData.password)
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Login gagal. Periksa email dan password Anda.")
+    if (result?.error) {
+      setError("Login gagal. Periksa email dan password Anda.")
     }
+    setIsLoading(false)
   }
 
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true)
     try {
-      // Panggil API backend untuk dapat URL login Google
-      const response = await googleAPI.googleLogin()
-      const authUrl = response.data.auth_url
-      // Redirect ke halaman Google login
-      window.location.href = authUrl
-    } catch (error: any) {
-      console.error("Google login error:", error)
+      await signIn("google", { callbackUrl: "/dashboard" })
+    } catch (error) {
       toast({
         title: "Gagal",
-        description: error.response?.data?.error || "Gagal terhubung dengan Google",
+        description: "Gagal terhubung dengan Google",
         variant: "destructive",
       })
+    } finally {
       setIsGoogleLoading(false)
     }
   }
 
-  if (!mounted) {
-    return null
-  }
+  if (!mounted) return null
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 bg-gradient-to-br from-background via-background to-muted/20">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-japanese-500/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl" />
