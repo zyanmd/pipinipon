@@ -11,24 +11,27 @@ const handler = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: "/login",
+    error: "/login", // Redirect ke login jika error
   },
   callbacks: {
     async signIn({ user, account }) {
-      console.log("SignIn callback - User:", user.email)
+      console.log("SignIn callback - Provider:", account?.provider)
+      console.log("SignIn callback - User email:", user.email)
       
       if (account?.provider === "google") {
         try {
+          console.log("Calling backend API...")
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/google-login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_token: account.id_token })
           })
           
+          console.log("Backend response status:", res.status)
           const data = await res.json()
-          console.log("Backend response:", data)
+          console.log("Backend response data:", data)
           
           if (res.ok && data.success) {
-            // Simpan token ke user object
             user.backendToken = data.access_token
             user.backendRefreshToken = data.refresh_token
             user.role = data.user.role
@@ -36,6 +39,7 @@ const handler = NextAuth({
             user.avatar = data.user.avatar
             return true
           }
+          console.log("Backend returned error:", data.error)
           return false
         } catch (error) {
           console.error("Google signIn error:", error)
@@ -65,6 +69,7 @@ const handler = NextAuth({
       return session
     }
   },
+  debug: true, // Aktifkan debug untuk melihat log
 })
 
 export { handler as GET, handler as POST }
