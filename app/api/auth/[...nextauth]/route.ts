@@ -14,6 +14,8 @@ const handler = NextAuth({
   },
   callbacks: {
     async signIn({ user, account }) {
+      console.log("SignIn callback - User:", user.email)
+      
       if (account?.provider === "google") {
         try {
           const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/google-login`, {
@@ -23,14 +25,15 @@ const handler = NextAuth({
           })
           
           const data = await res.json()
+          console.log("Backend response:", data)
           
           if (res.ok && data.success) {
+            // Simpan token ke user object
+            user.backendToken = data.access_token
+            user.backendRefreshToken = data.refresh_token
             user.role = data.user.role
             user.username = data.user.username
             user.avatar = data.user.avatar
-            user.xp = data.user.xp
-            user.rank = data.user.rank
-            user.streak = data.user.streak
             return true
           }
           return false
@@ -43,23 +46,21 @@ const handler = NextAuth({
     },
     async jwt({ token, user }) {
       if (user) {
+        token.backendToken = user.backendToken
+        token.backendRefreshToken = user.backendRefreshToken
         token.role = user.role
         token.username = user.username
         token.avatar = user.avatar
-        token.xp = user.xp
-        token.rank = user.rank
-        token.streak = user.streak
       }
       return token
     },
     async session({ session, token }) {
+      session.backendToken = token.backendToken
+      session.backendRefreshToken = token.backendRefreshToken
       if (session.user) {
-        session.user.role = token.role as string
-        session.user.username = token.username as string
-        session.user.avatar = token.avatar as string
-        session.user.xp = token.xp as number
-        session.user.rank = token.rank as string
-        session.user.streak = token.streak as number
+        session.user.role = token.role
+        session.user.username = token.username
+        session.user.avatar = token.avatar
       }
       return session
     }

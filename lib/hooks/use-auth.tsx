@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react"
 import { authAPI, userAPI, googleAPI } from "@/lib/api"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 
 interface User {
   id: number
@@ -40,9 +41,40 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const tokenCheckInterval = useRef<NodeJS.Timeout | null>(null)
+
+  // Sinkronkan user dari session NextAuth
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      // Konversi session user ke format User
+      const sessionUser: User = {
+        id: parseInt(session.user.id || "0"),
+        username: session.user.username || session.user.name || "",
+        email: session.user.email || "",
+        avatar: session.user.avatar || null,
+        role: session.user.role || "user",
+        xp: 0,
+        rank: "",
+        streak: 0
+      }
+      setUser(sessionUser)
+      
+      // Simpan token ke localStorage jika ada
+      if ((session as any).backendToken) {
+        localStorage.setItem("access_token", (session as any).backendToken)
+      }
+      if ((session as any).backendRefreshToken) {
+        localStorage.setItem("refresh_token", (session as any).backendRefreshToken)
+      }
+    } else if (status === "unauthenticated") {
+      setUser(null)
+      localStorage.removeItem("access_token")
+      localStorage.removeItem("refresh_token")
+    }
+  }, [session, status])
 
   const login = async (email: string, password: string) => {
     setIsLoading(true)
@@ -84,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Sending Google token to backend...")
       console.log("Token length:", idToken?.length)
       
-      // Panggil endpoint baru /google-login
       const response = await googleAPI.googleLogin(idToken)
       
       console.log("Response:", response?.data)
@@ -108,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       startTokenCheck()
-      router.push("/dashboard")
+      // Jangan redirect di sini, biarkan useEffect dari useSession yang handle
     } catch (error: any) {
       console.error("Google login error:", error.response?.data || error.message)
       throw error
@@ -205,9 +236,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Hanya fetch user jika tidak ada session dari NextAuth
   useEffect(() => {
-    fetchUser()
-  }, [fetchUser])
+    if (status !== "loading" && !session) {
+      fetchUser()
+    } else if (status === "loading") {
+      setIsLoading(true)
+    } else {
+      setIsLoading(false)
+    }
+  }, [fetchUser, session, status])
 
   return (
     <AuthContext.Provider value={{ 

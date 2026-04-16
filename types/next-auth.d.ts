@@ -1,16 +1,17 @@
-    import "next-auth"
+import "next-auth"
 
 declare module "next-auth" {
   interface User {
+    backendToken?: string
+    backendRefreshToken?: string
     role?: string
     username?: string
     avatar?: string
-    xp?: number
-    rank?: string
-    streak?: number
   }
   
   interface Session {
+    backendToken?: string
+    backendRefreshToken?: string
     user: {
       id?: string
       role?: string
@@ -18,20 +19,16 @@ declare module "next-auth" {
       avatar?: string
       email?: string
       name?: string
-      xp?: number
-      rank?: string
-      streak?: number
     }
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
+    backendToken?: string
+    backendRefreshToken?: string
     role?: string
     username?: string
     avatar?: string
-    xp?: number
-    rank?: string
-    streak?: number
   }
 }
