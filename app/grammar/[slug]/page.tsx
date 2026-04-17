@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent } from "@/components/ui/card"
-import { ArrowLeft, Eye, Calendar, Bookmark, Share2, BookOpen, Quote, ImageIcon, CheckCircle, AlertCircle, Heart } from "lucide-react"
+import { ArrowLeft, Eye, Calendar, Bookmark, Share2, BookOpen, Quote, ImageIcon, AlertCircle, Heart } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn, getJLPTColor, getJLPTLabel, formatDate } from "@/lib/utils"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -148,7 +148,7 @@ export default function GrammarDetailPage() {
         }
         canonical.setAttribute('href', `https://www.pipinipon.web.id/grammar/${slug}`)
         
-        // Schema.org untuk grammar lesson - PERBAIKI
+        // Schema.org untuk grammar lesson - PERBAIKI FINAL
         let scriptSchema = document.querySelector('#grammar-schema')
         if (!scriptSchema) {
           scriptSchema = document.createElement('script')
@@ -172,15 +172,15 @@ export default function GrammarDetailPage() {
           }
         }
         
-        // Buat citation items
+        // Buat citation items - tanpa properti 'text' yang tidak valid
         const citationItems = exampleSentencesList.slice(0, 3).map((sentence: any, idx: number) => ({
           "@type": "CreativeWork",
           "name": `Contoh Kalimat ${idx + 1}`,
-          "text": sentence.japanese,
           "inLanguage": "ja",
           "about": {
             "@type": "Thing",
-            "name": sentence.indonesian
+            "name": sentence.indonesian,
+            "description": sentence.japanese
           }
         }))
         
@@ -228,12 +228,12 @@ export default function GrammarDetailPage() {
           schemaData.citation = citationItems
         }
         
-        // Add aggregate rating if view_count > 0
+        // Add aggregate rating if view_count > 0 - PERBAIKI STRUKTUR
         if (grammarData.view_count > 0) {
           schemaData.aggregateRating = {
             "@type": "AggregateRating",
             "ratingValue": "4.8",
-            "ratingCount": Math.min(grammarData.view_count, 1000),
+            "ratingCount": grammarData.view_count,
             "bestRating": "5",
             "worstRating": "1"
           }
