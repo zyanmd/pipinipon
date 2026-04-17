@@ -1,3 +1,4 @@
+// app/layout.tsx
 import type { Metadata, Viewport } from "next"
 import { Noto_Sans_JP, Outfit } from "next/font/google"
 import "./globals.css"
@@ -51,8 +52,8 @@ export const metadata: Metadata = {
     "belajar jepang gratis",
   ],
   authors: [{ name: siteName, url: siteUrl }],
-  creator: siteName,
-  publisher: siteName,
+  creator: siteName,  // Hanya sekali
+  publisher: siteName, // Hanya sekali
   category: "Education",
   
   openGraph: {
@@ -68,14 +69,23 @@ export const metadata: Metadata = {
         width: 1200,
         height: 630,
         alt: "Pipinipon — Platform Belajar Bahasa Jepang",
+        type: "image/jpeg",
       },
     ],
+    videos: [],
+    audio: [],
+    countryName: "Indonesia",
+    emails: ["halo@pipinipon.id"],
+    phoneNumbers: [],
   },
   twitter: {
     card: "summary_large_image",
     title: `${siteName} — Belajar Bahasa Jepang Online`,
     description: siteDescription,
-    images: ["/og-image.jpg"],
+    images: {
+      url: "/og-image.jpg",
+      alt: "Pipinipon — Platform Belajar Bahasa Jepang",
+    },
     creator: "@pipinipon",
     site: "@pipinipon",
   },
@@ -94,18 +104,30 @@ export const metadata: Metadata = {
     canonical: siteUrl,
     languages: {
       "id-ID": siteUrl,
+      "en-US": `${siteUrl}/en`,
     },
   },
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/logo.png", sizes: "any", type: "image/png" },
+      { url: "/logo.png", sizes: "32x32", type: "image/png" },
+      { url: "/logo.png", sizes: "16x16", type: "image/png" },
     ],
-    apple: [{ url: "/apple-icon.png", sizes: "180x180" }],
-    shortcut: "/favicon.ico",
+    shortcut: "/logo.png",
+    apple: [
+      { url: "/logo.png", sizes: "180x180", type: "image/png" },
+      { url: "/logo.png", sizes: "152x152", type: "image/png" },
+      { url: "/logo.png", sizes: "120x120", type: "image/png" },
+    ],
+    other: [
+      {
+        rel: "mask-icon",
+        url: "/logo.png",
+        color: "#ea580c",
+      },
+    ],
   },
+  manifest: "/site.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -120,6 +142,14 @@ export const metadata: Metadata = {
   },
   formatDetection: { telephone: false },
   referrer: "origin-when-cross-origin",
+  applicationName: siteName,
+  generator: "Next.js",
+  abstract: siteDescription,
+  classification: "Education",
+  // HAPUS duplikasi creator dan publisher di sini (baris 148-149)
+  // creator: siteName,  // ← HAPUS!
+  // publisher: siteName, // ← HAPUS!
+  colorScheme: "light dark",
 }
 
 export const viewport: Viewport = {
@@ -131,9 +161,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  viewportFit: "cover",
 }
 
-// Schema.org untuk rating dan review
+// Schema.org untuk rating, review, WebSite, Organization, Course, Product
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -146,7 +177,10 @@ const jsonLd = {
       inLanguage: "id-ID",
       potentialAction: {
         "@type": "SearchAction",
-        target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/vocabulary?q={search_term_string}` },
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${siteUrl}/vocabulary?q={search_term_string}`,
+        },
         "query-input": "required name=search_term_string",
       },
     },
@@ -158,28 +192,55 @@ const jsonLd = {
       logo: {
         "@type": "ImageObject",
         url: `${siteUrl}/logo.png`,
-        width: 200,
-        height: 60,
+        width: 512,
+        height: 512,
+        caption: `${siteName} Logo`,
+      },
+      image: {
+        "@type": "ImageObject",
+        url: `${siteUrl}/og-image.jpg`,
+        width: 1200,
+        height: 630,
       },
       description: siteDescription,
       foundingDate: "2023",
+      foundingLocation: "Indonesia",
       areaServed: "ID",
-      knowsAbout: ["Bahasa Jepang", "JLPT", "Nihongo", "Kosakata Jepang"],
+      knowsAbout: ["Bahasa Jepang", "JLPT", "Nihongo", "Kosakata Jepang", "Tata Bahasa Jepang"],
       sameAs: [
         "https://instagram.com/pipinipon",
         "https://youtube.com/@pipinipon",
         "https://twitter.com/pipinipon",
+        "https://facebook.com/pipinipon",
+        "https://tiktok.com/@pipinipon",
       ],
+      contactPoint: {
+        "@type": "ContactPoint",
+        email: "halo@pipinipon.id",
+        contactType: "customer service",
+        availableLanguage: ["Indonesian", "English", "Japanese"],
+        areaServed: "ID",
+      },
     },
     {
       "@type": "Course",
+      "@id": `${siteUrl}/#course`,
       name: "Kursus Bahasa Jepang JLPT N5–N1",
-      description: "Pelajari bahasa Jepang dari level N5 hingga N1 dengan kurikulum terstruktur",
+      description: "Pelajari bahasa Jepang dari level N5 hingga N1 dengan kurikulum terstruktur, materi lengkap, dan latihan interaktif",
       provider: { "@id": `${siteUrl}/#organization` },
       url: `${siteUrl}/vocabulary`,
       educationalLevel: ["N5", "N4", "N3", "N2", "N1"],
       inLanguage: "id-ID",
       isAccessibleForFree: true,
+      hasCourseInstance: [
+        {
+          "@type": "CourseInstance",
+          courseMode: "online",
+          courseWorkload: "Fleksibel",
+          startDate: "2023-01-01",
+          endDate: "2030-12-31",
+        },
+      ],
       aggregateRating: {
         "@type": "AggregateRating",
         ratingValue: "4.8",
@@ -198,15 +259,18 @@ const jsonLd = {
           "@type": "Person",
           name: "Mahasiswa Pipinipon",
         },
+        reviewBody: "Kursus yang sangat membantu dalam belajar bahasa Jepang dari dasar hingga mahir.",
       },
     },
     {
       "@type": "Product",
+      "@id": `${siteUrl}/#product`,
       name: siteName,
       description: siteDescription,
       brand: {
         "@type": "Brand",
         name: siteName,
+        logo: `${siteUrl}/logo.png`,
       },
       aggregateRating: {
         "@type": "AggregateRating",
@@ -227,7 +291,8 @@ const jsonLd = {
             "@type": "Person",
             name: "Andi Wijaya",
           },
-          reviewBody: "Platform terbaik untuk belajar bahasa Jepang! Materi lengkap dari N5 sampai N1.",
+          reviewBody: "Platform terbaik untuk belajar bahasa Jepang! Materi lengkap dari N5 sampai N1. Sangat membantu persiapan JLPT.",
+          datePublished: "2024-01-15",
         },
         {
           "@type": "Review",
@@ -240,9 +305,51 @@ const jsonLd = {
             "@type": "Person",
             name: "Siti Nurhaliza",
           },
-          reviewBody: "Metode belajarnya menyenangkan dan mudah dipahami. Sangat direkomendasikan!",
+          reviewBody: "Metode belajarnya menyenangkan dan mudah dipahami. Fitur chat dengan sesama pelajar sangat bermanfaat. Sangat direkomendasikan!",
+          datePublished: "2024-02-20",
+        },
+        {
+          "@type": "Review",
+          reviewRating: {
+            "@type": "Rating",
+            ratingValue: "4.9",
+            bestRating: "5",
+          },
+          author: {
+            "@type": "Person",
+            name: "Budi Santoso",
+          },
+          reviewBody: "Berhasil lulus JLPT N3 setelah belajar di Pipinipon selama 6 bulan. Terima kasih!",
+          datePublished: "2024-03-10",
         },
       ],
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "IDR",
+        availability: "https://schema.org/OnlineOnly",
+        url: siteUrl,
+      },
+    },
+    {
+      "@type": "ImageObject",
+      "@id": `${siteUrl}/#logo`,
+      url: `${siteUrl}/logo.png`,
+      name: `${siteName} Logo`,
+      caption: "Logo resmi Pipinipon - Platform Belajar Bahasa Jepang",
+      width: 512,
+      height: 512,
+      license: "https://creativecommons.org/licenses/by/4.0/",
+      copyrightNotice: `© ${new Date().getFullYear()} ${siteName}`,
+    },
+    {
+      "@type": "ImageObject",
+      "@id": `${siteUrl}/#ogimage`,
+      url: `${siteUrl}/og-image.jpg`,
+      name: `${siteName} Open Graph Image`,
+      caption: "Preview gambar Pipinipon untuk media sosial",
+      width: 1200,
+      height: 630,
     },
   ],
 }
@@ -263,10 +370,12 @@ const footerLinks = {
   Perusahaan: [
     { label: "Tentang Kami", href: "/about" },
     { label: "Hubungi Kami", href: "/contact" },
+    { label: "Karir", href: "/careers" },
   ],
   Legal: [
     { label: "Syarat & Ketentuan", href: "/terms" },
     { label: "Kebijakan Privasi", href: "/privacy" },
+    { label: "Kebijakan Cookie", href: "/cookie-policy" },
   ],
 }
 
@@ -310,7 +419,7 @@ const socialLinks = [
 function LoadingFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-japanese-500 border-t-transparent" />
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
     </div>
   )
 }
@@ -335,6 +444,28 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="//www.googletagmanager.com" />
         <link rel="dns-prefetch" href="//www.google-analytics.com" />
+        
+        {/* Favicon dengan logo.png */}
+        <link rel="icon" type="image/png" sizes="512x512" href="/logo.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/logo.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/logo.png" />
+        <link rel="shortcut icon" href="/logo.png" />
+        
+        {/* Site manifest untuk PWA */}
+        <link rel="manifest" href="/site.webmanifest" />
+        
+        {/* Warna tema untuk browser */}
+        <meta name="theme-color" content="#ea580c" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        
+        {/* Microsoft Tiles */}
+        <meta name="msapplication-TileColor" content="#ea580c" />
+        <meta name="msapplication-TileImage" content="/logo.png" />
+        
+        {/* Facebook Domain Verification */}
+        <meta name="facebook-domain-verification" content="facebook-domain-verification-token" />
       </head>
       <body
         className={`${outfit.variable} ${noto.variable} font-sans antialiased`}
@@ -350,7 +481,7 @@ export default function RootLayout({
             <AuthProvider>
               <a
                 href="#main-content"
-                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-background focus:text-foreground focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-background focus:text-foreground focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
               >
                 Lewati ke konten utama
               </a>

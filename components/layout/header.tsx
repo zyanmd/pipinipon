@@ -302,8 +302,200 @@ export function Header() {
               
               {isLoggedIn && currentUser && (
                 <>
-                  {/* Notification Bell - sama seperti sebelumnya */}
-                  {/* ... kode notifikasi tetap sama ... */}
+                  {/* Notification Bell */}
+                  <div className="relative" ref={popupRef}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowNotificationPopup(!showNotificationPopup)}
+                      className={cn(
+                        "relative h-10 w-10 transition-all duration-200",
+                        isIphoneMode ? "rounded-xl" : "rounded-md",
+                        "hover:bg-muted/50"
+                      )}
+                    >
+                      <Bell className="h-5 w-5" />
+                      {totalUnread > 0 && (
+                        <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background" />
+                      )}
+                    </Button>
+
+                    <AnimatePresence>
+                      {showNotificationPopup && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                          transition={{ duration: 0.18 }}
+                          className="absolute right-0 mt-2 w-80 bg-popover rounded-2xl shadow-2xl border border-border/50 z-50 overflow-hidden"
+                        >
+                          <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+                            <h3 className="font-semibold text-sm">Notifikasi</h3>
+                            {totalUnread > 0 && (
+                              <button
+                                onClick={handleMarkAllRead}
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                              >
+                                <CheckCheck className="h-3 w-3" />
+                                Tandai semua
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Tab buttons */}
+                          <div className="flex border-b border-border/50">
+                            <button
+                              onClick={() => setActiveTab("mentions")}
+                              className={cn(
+                                "flex-1 px-4 py-2 text-xs font-medium transition-colors relative",
+                                activeTab === "mentions"
+                                  ? "text-foreground"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              <div className="flex items-center justify-center gap-1.5">
+                                <AtSign className="h-3.5 w-3.5" />
+                                Mention
+                                {mentionUnread > 0 && (
+                                  <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px]">
+                                    {mentionUnread}
+                                  </span>
+                                )}
+                              </div>
+                              {activeTab === "mentions" && (
+                                <motion.div
+                                  layoutId="activeTab"
+                                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-500 to-red-500"
+                                />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setActiveTab("replies")}
+                              className={cn(
+                                "flex-1 px-4 py-2 text-xs font-medium transition-colors relative",
+                                activeTab === "replies"
+                                  ? "text-foreground"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              <div className="flex items-center justify-center gap-1.5">
+                                <MessageSquareReply className="h-3.5 w-3.5" />
+                                Balasan
+                                {replyUnread > 0 && (
+                                  <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px]">
+                                    {replyUnread}
+                                  </span>
+                                )}
+                              </div>
+                              {activeTab === "replies" && (
+                                <motion.div
+                                  layoutId="activeTab"
+                                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-500 to-red-500"
+                                />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="max-h-[400px] overflow-y-auto">
+                            {fetchError ? (
+                              <div className="p-8 text-center text-muted-foreground text-sm">
+                                Gagal memuat notifikasi
+                              </div>
+                            ) : activeTab === "mentions" ? (
+                              recentMentions.length === 0 ? (
+                                <div className="p-8 text-center text-muted-foreground text-sm">
+                                  Tidak ada mention baru
+                                </div>
+                              ) : (
+                                recentMentions.map((mention) => (
+                                  <div
+                                    key={mention.id}
+                                    className="px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/30 last:border-0"
+                                    onClick={() => {
+                                      router.push(`/chat?messageId=${mention.message_id}`)
+                                      setShowNotificationPopup(false)
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm">
+                                          <span className="font-medium">{mention.mentioned_by?.username}</span>
+                                          {" "}mentions you in chat
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                                          {mention.message?.content}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          {new Date(mention.created_at).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                      {!mention.is_read && (
+                                        <button
+                                          onClick={(e) => handleMarkMentionAsRead(mention.id, e)}
+                                          className="h-5 w-5 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center text-[10px] hover:bg-blue-500/30 transition-colors"
+                                        >
+                                          ✓
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              )
+                            ) : (
+                              recentReplies.length === 0 ? (
+                                <div className="p-8 text-center text-muted-foreground text-sm">
+                                  Tidak ada balasan baru
+                                </div>
+                              ) : (
+                                recentReplies.map((reply) => (
+                                  <div
+                                    key={reply.id}
+                                    className="px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/30 last:border-0"
+                                    onClick={() => {
+                                      router.push(`/chat?messageId=${reply.reply_to_message_id}`)
+                                      setShowNotificationPopup(false)
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm">
+                                          <span className="font-medium">{reply.reply_from?.username}</span>
+                                          {" "}replied to your message
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                                          {reply.message?.content}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          {new Date(reply.created_at).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                      {!reply.is_read && (
+                                        <button
+                                          onClick={(e) => handleMarkReplyAsRead(reply.id, e)}
+                                          className="h-5 w-5 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center text-[10px] hover:bg-blue-500/30 transition-colors"
+                                        >
+                                          ✓
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              )
+                            )}
+                          </div>
+
+                          <div className="p-3 border-t border-border/50">
+                            <button
+                              onClick={handleViewAll}
+                              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              Lihat semua di Chat
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   
                   {/* Mobile Menu Button */}
                   <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -321,7 +513,86 @@ export function Header() {
                       </Button>
                     </SheetTrigger>
                     <SheetContent side="right" className="w-[300px] sm:w-[360px] p-0">
-                      {/* konten mobile menu */}
+                      <SheetHeader className="p-4 border-b border-border/50">
+                        <SheetTitle className="text-left flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                            <span className="text-white font-black text-[10px]">P</span>
+                          </div>
+                          <span className="text-base">Menu</span>
+                        </SheetTitle>
+                      </SheetHeader>
+                      
+                      <div className="flex flex-col p-4 gap-1">
+                        {navItems.map((item) => {
+                          const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setMobileMenuOpen(false)}
+                            >
+                              <Button
+                                variant={isActive ? "japanese" : "ghost"}
+                                className={cn(
+                                  "w-full justify-start transition-all duration-200",
+                                  isActive ? "shadow-md" : "hover:bg-muted/50"
+                                )}
+                              >
+                                <item.icon className="mr-2 h-4 w-4" />
+                                {item.label}
+                              </Button>
+                            </Link>
+                          )
+                        })}
+                        
+                        {isAdmin && (
+                          <Link href="/admin" onClick={() => setMobileMenuOpen(false)}>
+                            <Button
+                              variant={pathname === "/admin" ? "japanese" : "ghost"}
+                              className="w-full justify-start"
+                            >
+                              <Shield className="mr-2 h-4 w-4" />
+                              Admin
+                            </Button>
+                          </Link>
+                        )}
+                        
+                        <div className="h-px bg-border/50 my-2" />
+                        
+                        <Link href={`/profile/${currentUser?.username}`} onClick={() => setMobileMenuOpen(false)}>
+                          <Button variant="ghost" className="w-full justify-start">
+                            <User className="mr-2 h-4 w-4" />
+                            Profil
+                          </Button>
+                        </Link>
+                        
+                        <Link href="/settings" onClick={() => setMobileMenuOpen(false)}>
+                          <Button variant="ghost" className="w-full justify-start">
+                            <Settings className="mr-2 h-4 w-4" />
+                            Pengaturan
+                          </Button>
+                        </Link>
+                        
+                        {/* PERBAIKAN: Ganti button dengan div dan onClick handler langsung, bukan nested button */}
+                        <div
+                          onClick={handleLogout}
+                          className={cn(
+                            "flex items-center gap-2.5 px-3 py-2 text-sm rounded-md w-full cursor-pointer",
+                            "text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors duration-150"
+                          )}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleLogout()
+                            }
+                          }}
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Keluar</span>
+                        </div>
+                      </div>
                     </SheetContent>
                   </Sheet>
 
@@ -386,16 +657,26 @@ export function Header() {
 
                             <div className="my-1 h-px bg-border/60" />
 
-                            <button
+                            {/* PERBAIKAN: Ganti button dengan div untuk menghindari nested button */}
+                            <div
                               onClick={() => {
                                 setAvatarDropdownOpen(false)
                                 handleLogout()
                               }}
-                              className="flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-xl w-full text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors duration-150"
+                              className="flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-xl w-full cursor-pointer text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors duration-150"
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setAvatarDropdownOpen(false)
+                                  handleLogout()
+                                }
+                              }}
                             >
                               <LogOut className="h-4 w-4" />
                               <span>Keluar</span>
-                            </button>
+                            </div>
                           </div>
                         </motion.div>
                       )}

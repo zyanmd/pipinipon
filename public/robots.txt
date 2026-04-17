@@ -8,10 +8,10 @@ Disallow: /profile/
 Disallow: /settings/
 
 # Sitemap
-Sitemap: https://pipinipon.id/sitemap.xml
+Sitemap: https://pipinipon.my.id/sitemap.xml
 
 # Crawl delay untuk mengurangi beban server
 Crawl-delay: 1
 
 # Host
-Host: https://pipinipon.id
+Host: https://pipinipon.my.id
