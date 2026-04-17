@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils"
 // Helper untuk mendapatkan URL thumbnail
 const getThumbnailUrl = (thumbnail: string | null | undefined): string | null => {
   if (!thumbnail) return null
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
   if (thumbnail.includes('grammar/')) {
     return `${baseUrl}/uploads/${thumbnail}`
   }
@@ -497,19 +497,181 @@ export default function AdminPage() {
           <TabsTrigger value="categories">Categories</TabsTrigger>
         </TabsList>
 
-        {/* Dashboard Tab - sama seperti sebelumnya */}
+        {/* Dashboard Tab */}
         <TabsContent value="dashboard">
-          {/* ... konten dashboard ... */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Statistik Belajar</CardTitle>
+                <CardDescription>Ringkasan aktivitas belajar pengguna</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span>Total Sesi Belajar</span>
+                  <span className="font-bold text-lg">{adminStats?.study?.total_sessions || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Kosakata Dihafal</span>
+                  <span className="font-bold text-lg">{adminStats?.study?.mastered_items || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Tingkat Penguasaan</span>
+                  <span className="font-bold text-lg">{adminStats?.study?.mastery_rate || 0}%</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full" style={{ width: `${adminStats?.study?.mastery_rate || 0}%` }} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Statistik Pengguna</CardTitle>
+                <CardDescription>Informasi tentang pengguna platform</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span>Total Pengguna</span>
+                  <span className="font-bold text-lg">{adminStats?.users?.total || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Admin</span>
+                  <span className="font-bold text-lg">{adminStats?.users?.admins || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Terverifikasi</span>
+                  <span className="font-bold text-lg">{adminStats?.users?.verified || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Bergabung 7 hari terakhir</span>
+                  <span className="font-bold text-lg">{adminStats?.users?.recent_7days || 0}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        {/* Users Tab - sama seperti sebelumnya */}
+        {/* Users Tab */}
         <TabsContent value="users">
-          {/* ... konten users ... */}
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle>Manajemen Pengguna</CardTitle>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Cari pengguna..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>XP</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell>{u.id}</TableCell>
+                        <TableCell className="font-medium">{u.username}</TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <Select defaultValue={u.role} onValueChange={(v) => handleUpdateUserRole(u.username, v)}>
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {u.is_verified === 1 ? (
+                            <Badge variant="default" className="bg-green-500">Verified</Badge>
+                          ) : (
+                            <Badge variant="secondary">Unverified</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{u.xp || 0}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteUser(u.username)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {usersPagination.pages > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                  <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Previous</Button>
+                  <span className="py-2 px-3 text-sm">Page {currentPage} of {usersPagination.pages}</span>
+                  <Button variant="outline" size="sm" disabled={currentPage === usersPagination.pages} onClick={() => setCurrentPage(p => p + 1)}>Next</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        {/* Vocabulary Tab - sama seperti sebelumnya */}
+        {/* Vocabulary Tab */}
         <TabsContent value="vocabulary">
-          {/* ... konten vocabulary ... */}
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle>Manajemen Kosakata</CardTitle>
+                <Button variant="japanese" size="sm" onClick={() => setShowVocabDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Tambah Kosakata
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Kanji</TableHead>
+                      <TableHead>Hiragana</TableHead>
+                      <TableHead>Arti</TableHead>
+                      <TableHead>Level</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vocab.map((v) => (
+                      <TableRow key={v.id}>
+                        <TableCell>{v.id}</TableCell>
+                        <TableCell className="font-japanese">{v.kanji}</TableCell>
+                        <TableCell className="font-japanese">{v.hiragana}</TableCell>
+                        <TableCell>{v.arti}</TableCell>
+                        <TableCell><Badge variant="outline">{v.jlpt_level}</Badge></TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteVocab(v.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Grammar Tab */}
@@ -601,13 +763,133 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* Categories Tab - sama seperti sebelumnya */}
+        {/* Categories Tab */}
         <TabsContent value="categories">
-          {/* ... konten categories ... */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Manajemen Kategori</CardTitle>
+                <Button variant="japanese" size="sm" onClick={() => setShowCategoryDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Tambah Kategori
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Nama</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categories.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell>{c.id}</TableCell>
+                        <TableCell>{c.name}</TableCell>
+                        <TableCell>{c.slug}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteCategory(c.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Grammar Dialog with Thumbnail Upload, Example Sentences, and Conversations */}
+      {/* Vocabulary Dialog */}
+      <Dialog open={showVocabDialog} onOpenChange={setShowVocabDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedVocab ? "Edit Kosakata" : "Tambah Kosakata Baru"}</DialogTitle>
+            <DialogDescription>Isi informasi kosakata di bawah ini.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Kanji</Label><Input value={vocabForm.kanji} onChange={(e) => setVocabForm({ ...vocabForm, kanji: e.target.value })} /></div>
+              <div><Label>Hiragana</Label><Input value={vocabForm.hiragana} onChange={(e) => setVocabForm({ ...vocabForm, hiragana: e.target.value })} /></div>
+            </div>
+            <div><Label>Arti</Label><Input value={vocabForm.arti} onChange={(e) => setVocabForm({ ...vocabForm, arti: e.target.value })} /></div>
+            <div><Label>Contoh Kalimat</Label><Textarea value={vocabForm.contoh_kalimat} onChange={(e) => setVocabForm({ ...vocabForm, contoh_kalimat: e.target.value })} /></div>
+            <div><Label>Arti Contoh</Label><Input value={vocabForm.contoh_arti} onChange={(e) => setVocabForm({ ...vocabForm, contoh_arti: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>JLPT Level</Label>
+                <Select value={vocabForm.jlpt_level} onValueChange={(v) => setVocabForm({ ...vocabForm, jlpt_level: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="N5">N5</SelectItem>
+                    <SelectItem value="N4">N4</SelectItem>
+                    <SelectItem value="N3">N3</SelectItem>
+                    <SelectItem value="N2">N2</SelectItem>
+                    <SelectItem value="N1">N1</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Kategori ID</Label><Input type="number" value={vocabForm.kategori_id} onChange={(e) => setVocabForm({ ...vocabForm, kategori_id: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVocabDialog(false)}>Batal</Button>
+            <Button disabled={submitting} onClick={async () => {
+              setSubmitting(true)
+              try {
+                if (selectedVocab) await adminAPI.updateVocab(selectedVocab.id, vocabForm)
+                else await adminAPI.createVocab(vocabForm)
+                toast({ title: "Success", description: `Vocabulary ${selectedVocab ? "updated" : "created"} successfully` })
+                const vocabRes = await adminAPI.getVocab({ page: 1, per_page: 50 })
+                setVocab(vocabRes.data.data.vocab)
+                setShowVocabDialog(false)
+                setSelectedVocab(null)
+                setVocabForm({ kanji: "", hiragana: "", romaji: "", arti: "", contoh_kalimat: "", contoh_arti: "", jlpt_level: "N5", kategori_id: "" })
+              } catch (error) { toast({ title: "Error", description: "Failed to save vocabulary", variant: "destructive" }) }
+              finally { setSubmitting(false) }
+            }}>Simpan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Category Dialog */}
+      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedCategory ? "Edit Kategori" : "Tambah Kategori Baru"}</DialogTitle>
+            <DialogDescription>Isi informasi kategori di bawah ini.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div><Label>Nama Kategori</Label><Input value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} /></div>
+            <div><Label>Slug</Label><Input value={categoryForm.slug} onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })} placeholder="auto-generated" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCategoryDialog(false)}>Batal</Button>
+            <Button disabled={submitting} onClick={async () => {
+              setSubmitting(true)
+              try {
+                if (selectedCategory) await adminAPI.updateCategory(selectedCategory.id, categoryForm)
+                else await adminAPI.createCategory(categoryForm)
+                toast({ title: "Success", description: `Category ${selectedCategory ? "updated" : "created"} successfully` })
+                const categoriesRes = await adminAPI.getCategories()
+                setCategories(categoriesRes.data.data.categories)
+                setShowCategoryDialog(false)
+                setSelectedCategory(null)
+                setCategoryForm({ name: "", slug: "" })
+              } catch (error) { toast({ title: "Error", description: "Failed to save category", variant: "destructive" }) }
+              finally { setSubmitting(false) }
+            }}>Simpan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Grammar Dialog */}
       <Dialog open={showGrammarDialog} onOpenChange={setShowGrammarDialog}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

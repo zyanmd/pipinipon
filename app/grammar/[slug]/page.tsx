@@ -148,7 +148,7 @@ export default function GrammarDetailPage() {
         }
         canonical.setAttribute('href', `https://www.pipinipon.web.id/grammar/${slug}`)
         
-        // Schema.org untuk grammar lesson - PERBAIKI FINAL
+        // Schema.org untuk grammar lesson - VERSI SEDERHANA YANG VALID
         let scriptSchema = document.querySelector('#grammar-schema')
         if (!scriptSchema) {
           scriptSchema = document.createElement('script')
@@ -157,34 +157,8 @@ export default function GrammarDetailPage() {
           document.head.appendChild(scriptSchema)
         }
         
-        // Parse example sentences for citation
-        let exampleSentencesList: any[] = []
-        if (grammarData.example_sentences) {
-          try {
-            const parsed = typeof grammarData.example_sentences === 'string' 
-              ? JSON.parse(grammarData.example_sentences) 
-              : grammarData.example_sentences
-            if (Array.isArray(parsed)) {
-              exampleSentencesList = parsed
-            }
-          } catch (e) {
-            console.error("Error parsing example sentences:", e)
-          }
-        }
-        
-        // Buat citation items - tanpa properti 'text' yang tidak valid
-        const citationItems = exampleSentencesList.slice(0, 3).map((sentence: any, idx: number) => ({
-          "@type": "CreativeWork",
-          "name": `Contoh Kalimat ${idx + 1}`,
-          "inLanguage": "ja",
-          "about": {
-            "@type": "Thing",
-            "name": sentence.indonesian,
-            "description": sentence.japanese
-          }
-        }))
-        
-        const schemaData: any = {
+        // Schema data yang sederhana dan valid
+        const schemaData = {
           "@context": "https://schema.org",
           "@type": "LearningResource",
           "name": grammarData.title,
@@ -205,38 +179,12 @@ export default function GrammarDetailPage() {
             "name": "Pipinipon",
             "url": "https://www.pipinipon.web.id"
           },
-          "about": {
-            "@type": "Thing",
-            "name": "Tata Bahasa Jepang",
-            "description": grammarData.meaning
-          },
-          "audience": {
-            "@type": "EducationalAudience",
-            "educationalRole": "student",
-            "audienceType": "Pembelajar Bahasa Jepang"
-          },
           "learningResourceType": "Grammar Lesson",
           "interactivityType": "expositive",
           "isAccessibleForFree": true,
           "image": thumbnailFullUrl,
           "mainEntityOfPage": `https://www.pipinipon.web.id/grammar/${slug}`,
-          "keywords": `${grammarData.title}, JLPT ${grammarData.level}, tata bahasa Jepang, grammar Jepang, belajar Jepang`
-        }
-        
-        // Add citation if available
-        if (citationItems.length > 0) {
-          schemaData.citation = citationItems
-        }
-        
-        // Add aggregate rating if view_count > 0 - PERBAIKI STRUKTUR
-        if (grammarData.view_count > 0) {
-          schemaData.aggregateRating = {
-            "@type": "AggregateRating",
-            "ratingValue": "4.8",
-            "ratingCount": grammarData.view_count,
-            "bestRating": "5",
-            "worstRating": "1"
-          }
+          "keywords": `${grammarData.title}, JLPT ${grammarData.level}, tata bahasa Jepang`
         }
         
         scriptSchema.textContent = JSON.stringify(schemaData, null, 2)
