@@ -52,8 +52,8 @@ export const metadata: Metadata = {
     "belajar jepang gratis",
   ],
   authors: [{ name: siteName, url: siteUrl }],
-  creator: siteName,  // Hanya sekali
-  publisher: siteName, // Hanya sekali
+  creator: siteName,
+  publisher: siteName,
   category: "Education",
   
   openGraph: {
@@ -146,10 +146,6 @@ export const metadata: Metadata = {
   generator: "Next.js",
   abstract: siteDescription,
   classification: "Education",
-  // HAPUS duplikasi creator dan publisher di sini (baris 148-149)
-  // creator: siteName,  // ← HAPUS!
-  // publisher: siteName, // ← HAPUS!
-  colorScheme: "light dark",
 }
 
 export const viewport: Viewport = {
@@ -162,6 +158,7 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
+  colorScheme: "light dark",
 }
 
 // Schema.org untuk rating, review, WebSite, Organization, Course, Product
@@ -340,7 +337,7 @@ const jsonLd = {
       width: 512,
       height: 512,
       license: "https://creativecommons.org/licenses/by/4.0/",
-      copyrightNotice: `© ${new Date().getFullYear()} ${siteName}`,
+      copyrightNotice: `(c) ${new Date().getFullYear()} ${siteName}`,
     },
     {
       "@type": "ImageObject",
@@ -425,7 +422,25 @@ function LoadingFallback() {
 }
 
 // Google Client ID
-const GOOGLE_CLIENT_ID = "654557227996-man0cnkr3hhslfak0j1jrae2t2c5f0ms.apps.googleusercontent.com"
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "654557227996-man0cnkr3hhslfak0j1jrae2t2c5f0ms.apps.googleusercontent.com"
+
+// Components that need Google OAuth must be wrapped in a client component
+function ClientProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </ThemeProvider>
+    </GoogleOAuthProvider>
+  )
+}
 
 export default function RootLayout({
   children,
@@ -471,112 +486,103 @@ export default function RootLayout({
         className={`${outfit.variable} ${noto.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
+        <ClientProviders>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-background focus:text-foreground focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
           >
-            <AuthProvider>
-              <a
-                href="#main-content"
-                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-background focus:text-foreground focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
-              >
-                Lewati ke konten utama
-              </a>
+            Lewati ke konten utama
+          </a>
 
-              <div className="relative flex min-h-screen flex-col">
-                <Header />
+          <div className="relative flex min-h-screen flex-col">
+            <Header />
 
-                <main id="main-content" className="flex-1 w-full pt-4" role="main">
-                  <Suspense fallback={<LoadingFallback />}>
-                    {children}
-                  </Suspense>
-                </main>
+            <main id="main-content" className="flex-1 w-full pt-4" role="main">
+              <Suspense fallback={<LoadingFallback />}>
+                {children}
+              </Suspense>
+            </main>
 
-                <footer className="border-t border-border bg-muted/20 mt-auto" role="contentinfo" aria-label="Footer">
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
-                      <div className="lg:col-span-1">
-                        <Link 
-                          href="/" 
-                          className="inline-flex items-center gap-2 mb-4" 
-                          aria-label="Pipinipon — Halaman Utama"
+            <footer className="border-t border-border bg-muted/20 mt-auto" role="contentinfo" aria-label="Footer">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
+                  <div className="lg:col-span-1">
+                    <Link 
+                      href="/" 
+                      className="inline-flex items-center gap-2 mb-4" 
+                      aria-label="Pipinipon — Halaman Utama"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center flex-shrink-0 shadow-md">
+                        <span className="text-white font-black text-sm">ぴ</span>
+                      </div>
+                      <span className="font-black text-xl bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
+                        Pipinipon
+                      </span>
+                    </Link>
+                    <p className="text-muted-foreground text-sm leading-relaxed mb-5">
+                      Platform belajar bahasa Jepang terpercaya untuk pelajar Indonesia.
+                    </p>
+                    <div className="flex gap-2" aria-label="Media sosial Pipinipon">
+                      {socialLinks.map((s) => (
+                        <a
+                          key={s.label}
+                          href={s.href}
+                          aria-label={s.label}
+                          target={s.href.startsWith("http") ? "_blank" : undefined}
+                          rel={s.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                          className="w-8 h-8 rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all duration-150"
                         >
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center flex-shrink-0 shadow-md">
-                            <span className="text-white font-black text-sm">ぴ</span>
-                          </div>
-                          <span className="font-black text-xl bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
-                            Pipinipon
-                          </span>
-                        </Link>
-                        <p className="text-muted-foreground text-sm leading-relaxed mb-5">
-                          Platform belajar bahasa Jepang terpercaya untuk pelajar Indonesia.
-                        </p>
-                        <div className="flex gap-2" aria-label="Media sosial Pipinipon">
-                          {socialLinks.map((s) => (
-                            <a
-                              key={s.label}
-                              href={s.href}
-                              aria-label={s.label}
-                              target={s.href.startsWith("http") ? "_blank" : undefined}
-                              rel={s.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                              className="w-8 h-8 rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all duration-150"
-                            >
-                              <s.Icon />
-                            </a>
+                          <s.Icon />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <nav className="lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-8" aria-label="Footer navigasi">
+                    {Object.entries(footerLinks).map(([section, links]) => (
+                      <div key={section}>
+                        <h3 className="font-bold text-xs text-foreground mb-4 uppercase tracking-wider">
+                          {section}
+                        </h3>
+                        <ul className="space-y-2" role="list">
+                          {links.map((link) => (
+                            <li key={link.href}>
+                              <Link
+                                href={link.href}
+                                className="text-sm text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors duration-150"
+                              >
+                                {link.label}
+                              </Link>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       </div>
-
-                      <nav className="lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-8" aria-label="Footer navigasi">
-                        {Object.entries(footerLinks).map(([section, links]) => (
-                          <div key={section}>
-                            <h3 className="font-bold text-xs text-foreground mb-4 uppercase tracking-wider">
-                              {section}
-                            </h3>
-                            <ul className="space-y-2" role="list">
-                              {links.map((link) => (
-                                <li key={link.href}>
-                                  <Link
-                                    href={link.href}
-                                    className="text-sm text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors duration-150"
-                                  >
-                                    {link.label}
-                                  </Link>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </nav>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-border">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                      <p className="text-xs text-muted-foreground">
-                        © {new Date().getFullYear()} Pipinipon. Hak cipta dilindungi.
-                      </p>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Globe className="w-3.5 h-3.5" />
-                        <span>Bahasa Indonesia</span>
-                      </div>
-                    </div>
-                  </div>
-                </footer>
-
-                <FloatingChat 
-                  position="bottom-right"
-                  size="md"
-                  title="Chat Global"
-                  autoOpenOnNotification={true}
-                />
+                    ))}
+                  </nav>
+                </div>
               </div>
-            </AuthProvider>
-          </ThemeProvider>
-        </GoogleOAuthProvider>
+
+              <div className="border-t border-border">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    © {new Date().getFullYear()} Pipinipon. Hak cipta dilindungi.
+                  </p>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>Bahasa Indonesia</span>
+                  </div>
+                </div>
+              </div>
+            </footer>
+
+            <FloatingChat 
+              position="bottom-right"
+              size="md"
+              title="Chat Global"
+              autoOpenOnNotification={true}
+            />
+          </div>
+        </ClientProviders>
       </body>
     </html>
   )

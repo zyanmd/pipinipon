@@ -21,19 +21,22 @@ interface User {
   location?: string
   created_at?: string
   updated_at?: string
+  requires_verification?: boolean
 }
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (username: string, email: string, password: string) => Promise<void>
+  register: (username: string, email: string, password: string) => Promise<{ requiresVerification: boolean; email?: string }>
   loginWithGoogle: (idToken: string) => Promise<void>
   logout: () => void
   fetchUser: () => Promise<void>
   updateUser: (data: Partial<User>) => void
   checkToken: () => Promise<boolean>
   setUser: (user: User | null) => void
+  resendVerification: (email?: string) => Promise<void>
+  verifyEmail: (code: string, email?: string) => Promise<{ success: boolean; autoLoggedIn?: boolean }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -89,10 +92,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       const response = await authAPI.login({ email, password })
-      const { access_token, refresh_token, user } = response.data
+      const { access_token, refresh_token, user: userData, requires_verification } = response.data
+      
+      // Jika email belum diverifikasi, backend akan mengembalikan requires_verification
+      if (requires_verification) {
+        throw { 
+          response: { 
+            data: { 
+              error: "Email belum diverifikasi. Silakan cek email Anda untuk kode verifikasi.",
+              requires_verification: true,
+              email: email
+            } 
+          } 
+        }
+      }
+      
       localStorage.setItem("access_token", access_token)
       localStorage.setItem("refresh_token", refresh_token)
-      setUser(user)
+      setUser(userData)
       startTokenCheck()
       router.push("/dashboard")
     } catch (error) {
@@ -106,12 +123,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       const response = await authAPI.register({ username, email, password })
-      const { access_token, refresh_token, user } = response.data
-      localStorage.setItem("access_token", access_token)
-      localStorage.setItem("refresh_token", refresh_token)
-      setUser(user)
-      startTokenCheck()
-      router.push("/dashboard")
+      const { user: userData, requires_verification, verification_sent } = response.data
+      
+      // Set user data tapi tanpa token (belum login)
+      // User harus verifikasi email dulu
+      setUser(userData)
+      
+      // JANGAN simpan token karena backend tidak mengembalikan token
+      // localStorage.removeItem("access_token") // Pastikan tidak ada token
+      // localStorage.removeItem("refresh_token")
+      
+      return {
+        requiresVerification: requires_verification,
+        email: email
+      }
     } catch (error) {
       throw error
     } finally {
@@ -171,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUser = useCallback(async () => {
     const token = localStorage.getItem("access_token")
     
+    // Jika tidak ada token, jangan fetch user
     if (!token) {
       setIsLoading(false)
       return
@@ -206,6 +232,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const resendVerification = async (email?: string) => {
+    try {
+      const response = await authAPI.sendVerification(email)
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  }
+
+  const verifyEmail = async (code: string, email?: string) => {
+    try {
+      const response = await authAPI.verifyEmail(code, email)
+      const { success, access_token, refresh_token, user: userData, auto_logged_in } = response.data
+      
+      if (success && auto_logged_in && access_token) {
+        // Jika backend mengembalikan token (auto-login)
+        localStorage.setItem("access_token", access_token)
+        if (refresh_token) {
+          localStorage.setItem("refresh_token", refresh_token)
+        }
+        if (userData) {
+          setUser(userData)
+        }
+        startTokenCheck()
+      }
+      
+      return { success, autoLoggedIn: auto_logged_in }
+    } catch (error) {
+      throw error
+    }
+  }
+
   const startTokenCheck = () => {
     if (tokenCheckInterval.current) {
       clearInterval(tokenCheckInterval.current)
@@ -233,7 +291,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logout()
         }
       }
-    }, 3600000)
+    }, 3600000) // Check every hour
   }
 
   useEffect(() => {
@@ -246,7 +304,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Jangan fetch user di halaman callback (biar URL params yang handle)
-    if (pathname !== '/auth/callback') {
+    // Juga jangan fetch user di halaman verifikasi email
+    if (pathname !== '/auth/callback' && pathname !== '/verify-email') {
       fetchUser()
     } else {
       setIsLoading(false)
@@ -264,7 +323,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchUser, 
       updateUser, 
       checkToken,
-      setUser
+      setUser,
+      resendVerification,
+      verifyEmail
     }}>
       {children}
     </AuthContext.Provider>

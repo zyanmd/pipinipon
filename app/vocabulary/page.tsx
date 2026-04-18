@@ -7,7 +7,7 @@ import { VocabCard } from "@/components/vocabulary/vocab-card"
 import { VocabFilter } from "@/components/vocabulary/vocab-filter"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Filter, BookOpen, CheckCircle, PenTool } from "lucide-react"
+import { Search, Filter, BookOpen, CheckCircle } from "lucide-react"  // HAPUS PenTool
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -141,21 +141,6 @@ export default function VocabularyPage() {
     setShowFilters(false)
   }
 
-  const handleStartWritingPractice = () => {
-    if (filters.jlpt_level) {
-      router.push(`/writing-practice?level=${filters.jlpt_level}`)
-    } else {
-      router.push("/writing-practice")
-    }
-  }
-
-  const getWritingPracticeUrl = () => {
-    if (filters.jlpt_level) {
-      return `/writing-practice?level=${filters.jlpt_level}`
-    }
-    return "/writing-practice"
-  }
-
   const hasActiveFilters = filters.jlpt_level !== "" || filters.mastered_status !== "all" || filters.kategori_id !== ""
   const isMasteredFilter = filters.mastered_status === "mastered"
   const isNotMasteredFilter = filters.mastered_status === "not_mastered"
@@ -183,18 +168,7 @@ export default function VocabularyPage() {
             </div>
           </div>
 
-          {/* Tombol Writing Practice */}
-          {user && (
-            <Link href="/writing-practice">
-              <Button 
-                variant="japanese" 
-                className="gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <PenTool className="h-4 w-4" />
-                <span>Praktek Menulis</span>
-              </Button>
-            </Link>
-          )}
+          {/* TOMBOL WRITING PRACTICE DIHAPUS */}
         </div>
       </motion.div>
 
@@ -223,14 +197,7 @@ export default function VocabularyPage() {
             )}
           </Button>
           
-          {/* Quick Writing Practice Button for Mobile */}
-          {user && (
-            <Link href="/writing-practice" className="sm:hidden">
-              <Button variant="outline" className="gap-2">
-                <PenTool className="h-4 w-4" />
-              </Button>
-            </Link>
-          )}
+          {/* QUICK WRITING PRACTICE BUTTON UNTUK MOBILE DIHAPUS */}
         </div>
       </div>
 
@@ -276,36 +243,7 @@ export default function VocabularyPage() {
         </div>
       </div>
 
-      {/* Writing Practice Banner */}
-      {user && vocab.length > 0 && !isMasteredFilter && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 rounded-xl bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 border border-orange-200 dark:border-orange-800"
-        >
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
-                <PenTool className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Latihan Menulis Huruf Jepang</p>
-                <p className="text-sm text-muted-foreground">
-                  {filters.jlpt_level 
-                    ? `Praktek menulis kosakata level ${filters.jlpt_level}`
-                    : "Praktek menulis kosakata yang belum dihafal"}
-                </p>
-              </div>
-            </div>
-            <Link href={getWritingPracticeUrl()}>
-              <Button variant="outline" className="gap-2 border-orange-300 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30">
-                Mulai Latihan
-                <PenTool className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </motion.div>
-      )}
+      {/* WRITING PRACTICE BANNER DIHAPUS */}
 
       {/* Vocabulary Grid */}
       {!loading && vocab.length === 0 && !filters.search && !hasActiveFilters ? (
@@ -337,12 +275,7 @@ export default function VocabularyPage() {
             >
               Lihat semua kosakata
             </Button>
-            <Link href="/writing-practice">
-              <Button variant="outline">
-                <PenTool className="mr-2 h-4 w-4" />
-                Latihan Menulis
-              </Button>
-            </Link>
+            {/* TOMBOL LATIHAN MENULIS DIHAPUS */}
           </div>
         </div>
       ) : !loading && vocab.length === 0 && isNotMasteredFilter ? (
@@ -364,12 +297,7 @@ export default function VocabularyPage() {
             >
               Lihat semua kosakata
             </Button>
-            <Link href="/writing-practice">
-              <Button variant="outline">
-                <PenTool className="mr-2 h-4 w-4" />
-                Latihan Menulis
-              </Button>
-            </Link>
+            {/* TOMBOL LATIHAN MENULIS DIHAPUS */}
           </div>
         </div>
       ) : (
@@ -432,12 +360,7 @@ export default function VocabularyPage() {
             >
               Hapus pencarian
             </Button>
-            <Link href="/writing-practice">
-              <Button variant="outline">
-                <PenTool className="mr-2 h-4 w-4" />
-                Latihan Menulis
-              </Button>
-            </Link>
+            {/* TOMBOL LATIHAN MENULIS DIHAPUS */}
           </div>
         </div>
       )}

@@ -1,15 +1,18 @@
 // lib/image-helper.ts
 
-type ImageType = 'avatar' | 'cover' | 'grammar';
+type ImageType = 'avatar' | 'cover' | 'grammar' | 'reading';
 
 export const getImageUrl = (
   path: string | null | undefined,
   type: ImageType = 'avatar'
 ): string | undefined => {
   if (!path) return undefined;
+  
+  // Jika sudah URL lengkap, return langsung
   if (path.startsWith('http')) return path;
   
-  const baseUrl = 'https://api.pipinipon.site';
+  // Gunakan environment variable atau default
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site';
   let cleanPath = path;
   
   // Hapus prefix yang tidak diinginkan
@@ -17,7 +20,8 @@ export const getImageUrl = (
     cleanPath = cleanPath.replace('uploads/', '');
   }
   
-  const prefixes = ['avatars/', 'covers/', 'grammar/', 'grammars/'];
+  // Hapus prefix folder yang mungkin sudah ada
+  const prefixes = ['avatars/', 'covers/', 'grammar/', 'grammars/', 'readings/'];
   for (const prefix of prefixes) {
     if (cleanPath.startsWith(prefix)) {
       cleanPath = cleanPath.replace(prefix, '');
@@ -38,6 +42,7 @@ export const getImageUrl = (
     case 'avatar': folder = 'avatars'; break;
     case 'cover': folder = 'covers'; break;
     case 'grammar': folder = 'grammar'; break;
+    case 'reading': folder = 'readings'; break;
   }
   
   return `${baseUrl}/uploads/${folder}/${cleanPath}`;
@@ -57,13 +62,24 @@ export const getGrammarThumbnailUrl = (thumbnail: string | null | undefined): st
   if (!thumbnail) return '/default-grammar.jpg';
   
   // Base URL
-  const baseUrl = 'https://api.pipinipon.site';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site';
   
   // Ambil hanya nama file (setelah slash terakhir)
   let filename = thumbnail;
   const lastSlashIndex = filename.lastIndexOf('/');
   if (lastSlashIndex !== -1) {
     filename = filename.substring(lastSlashIndex + 1);
+  }
+  
+  // Hapus prefix folder jika ada
+  if (filename.startsWith('grammar/')) {
+    filename = filename.replace('grammar/', '');
+  }
+  if (filename.startsWith('grammars/')) {
+    filename = filename.replace('grammars/', '');
+  }
+  if (filename.startsWith('uploads/')) {
+    filename = filename.replace('uploads/', '');
   }
   
   // Jika filename tidak diawali 'grammar_', tambahkan
@@ -75,4 +91,47 @@ export const getGrammarThumbnailUrl = (thumbnail: string | null | undefined): st
   }
   
   return `${baseUrl}/uploads/grammar/${filename}`;
+};
+
+export const getReadingThumbnailUrl = (thumbnail: string | null | undefined): string => {
+  if (!thumbnail) return '/default-reading.jpg';
+  
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site';
+  
+  // Ambil hanya nama file (setelah slash terakhir)
+  let filename = thumbnail;
+  const lastSlashIndex = filename.lastIndexOf('/');
+  if (lastSlashIndex !== -1) {
+    filename = filename.substring(lastSlashIndex + 1);
+  }
+  
+  // Hapus prefix folder jika ada
+  if (filename.startsWith('readings/')) {
+    filename = filename.replace('readings/', '');
+  }
+  if (filename.startsWith('uploads/')) {
+    filename = filename.replace('uploads/', '');
+  }
+  
+  return `${baseUrl}/uploads/readings/${filename}`;
+};
+
+// Helper untuk mendapatkan URL reading dengan path yang sudah diproses
+export const getReadingImageUrl = (thumbnail: string | null | undefined): string | null => {
+  if (!thumbnail) return null;
+  
+  // Jika sudah URL lengkap
+  if (thumbnail.startsWith('http')) return thumbnail;
+  
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site';
+  
+  // Jika sudah dimulai dengan slash
+  if (thumbnail.startsWith('/')) return thumbnail;
+  
+  // Jika sudah包含完整路径
+  if (thumbnail.includes('uploads/readings/')) {
+    return `${baseUrl}/${thumbnail}`;
+  }
+  
+  return `${baseUrl}/uploads/readings/${thumbnail}`;
 };

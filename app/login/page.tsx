@@ -12,6 +12,16 @@ import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, Sparkles } from "lucide-re
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
+import { GoogleLoginButton } from "@/components/auth/google-login-button-v3"  // Ganti ke v3
+import { authAPI } from "@/lib/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -21,6 +31,14 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" })
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
+  const [isResending, setIsResending] = useState(false)
+  
+  // Modal verifikasi
+  const [showVerifyModal, setShowVerifyModal] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState("")
+  const [verificationCode, setVerificationCode] = useState("")
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verifyError, setVerifyError] = useState("")
 
   useEffect(() => {
     setMounted(true)
@@ -47,7 +65,85 @@ export default function LoginPage() {
     try {
       await login(formData.email, formData.password)
     } catch (err: any) {
-      setError(err.response?.data?.error || "Login gagal")
+      const errorData = err.response?.data
+      const errorMsg = errorData?.error || "Login gagal"
+      
+      console.log("Login error:", errorData)
+      
+      if (errorData?.requires_verification === true) {
+        setUnverifiedEmail(formData.email)
+        setShowVerifyModal(true)
+        setError("")
+        try {
+          await authAPI.sendVerification(formData.email)
+          toast({
+            title: "Kode Dikirim",
+            description: "Kode verifikasi telah dikirim ke email Anda",
+          })
+        } catch (sendError) {
+          console.error("Failed to send verification code")
+          toast({
+            title: "Perhatian",
+            description: "Gagal mengirim kode verifikasi. Silakan klik 'Kirim ulang kode'",
+            variant: "destructive",
+          })
+        }
+      } else {
+        setError(errorMsg)
+      }
+    }
+  }
+
+  const handleVerify = async () => {
+    if (!verificationCode || verificationCode.length !== 6) {
+      setVerifyError("Masukkan kode verifikasi 6 digit")
+      return
+    }
+    
+    setIsVerifying(true)
+    setVerifyError("")
+    
+    try {
+      const response = await authAPI.verifyEmail(verificationCode, unverifiedEmail)
+      
+      if (response.data.success) {
+        toast({
+          title: "Verifikasi Berhasil!",
+          description: "Email Anda telah terverifikasi. Silakan login kembali.",
+        })
+        setShowVerifyModal(false)
+        setVerificationCode("")
+        try {
+          await login(formData.email, formData.password)
+        } catch (loginError) {
+          toast({
+            title: "Silakan Login",
+            description: "Email sudah terverifikasi. Silakan klik login kembali.",
+          })
+        }
+      }
+    } catch (err: any) {
+      setVerifyError(err.response?.data?.error || "Verifikasi gagal")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  const handleResendCode = async () => {
+    if (!unverifiedEmail) return
+    
+    setIsResending(true)
+    setVerifyError("")
+    try {
+      await authAPI.sendVerification(unverifiedEmail)
+      toast({
+        title: "Kode Dikirim!",
+        description: `Kode verifikasi baru telah dikirim ke ${unverifiedEmail}`,
+      })
+    } catch (err: any) {
+      setVerifyError(err.response?.data?.error || "Gagal mengirim kode")
+    } finally {
+      setIsResending(false)
     }
   }
 
@@ -158,6 +254,18 @@ export default function LoginPage() {
                   Lupa password?
                 </Link>
               </div>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Atau lanjutkan dengan</span>
+                </div>
+              </div>
+
+              {/* Ganti ke GoogleLoginButton v3 */}
+              <GoogleLoginButton isRegister={false} />
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-4 pb-8">
@@ -207,6 +315,81 @@ export default function LoginPage() {
           <Link href="/privacy" className="hover:text-japanese-600 transition-colors">Kebijakan Privasi</Link>
         </motion.p>
       </motion.div>
+
+      {/* Modal Verifikasi Email */}
+      <Dialog open={showVerifyModal} onOpenChange={setShowVerifyModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verifikasi Email</DialogTitle>
+            <DialogDescription>
+              Email {unverifiedEmail} belum diverifikasi. Masukkan kode verifikasi yang telah dikirim ke email Anda.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {verifyError && (
+              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                <span>{verifyError}</span>
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="verify-code">Kode Verifikasi (6 digit)</Label>
+              <Input
+                id="verify-code"
+                type="text"
+                placeholder="000000"
+                maxLength={6}
+                className="text-center text-2xl tracking-widest"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                disabled={isVerifying}
+                autoFocus
+              />
+            </div>
+            
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={isResending}
+                className="text-sm text-japanese-600 hover:text-japanese-700 transition-colors disabled:opacity-50"
+              >
+                {isResending ? "Mengirim..." : "Kirim ulang kode"}
+              </button>
+            </div>
+          </div>
+          
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowVerifyModal(false)
+                setVerifyError("")
+                setVerificationCode("")
+              }}
+              disabled={isVerifying}
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleVerify}
+              disabled={isVerifying || verificationCode.length !== 6}
+              className="bg-gradient-to-r from-japanese-500 to-japanese-600"
+            >
+              {isVerifying ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Memverifikasi...
+                </>
+              ) : (
+                "Verifikasi"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

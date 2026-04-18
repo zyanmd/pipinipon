@@ -51,16 +51,23 @@ api.interceptors.response.use(
     return response
   },
   async (error) => {
-    console.error(`[API Error] ${error.config?.url} - Status: ${error.response?.status}`, error.response?.data)
-    
     const originalRequest = error.config
+    const errorData = error.response?.data
+    const status = error.response?.status
     
-    // Cegah infinite loop dan hanya handle 401
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    console.error(`[API Error] ${originalRequest?.url} - Status: ${status}`, errorData)
+    
+    // SPECIAL CASE: Jika error karena email belum diverifikasi
+    if (status === 401 && errorData?.requires_verification === true) {
+      console.log('[API] Email not verified, showing verification modal')
+      return Promise.reject(error)
+    }
+    
+    // Cegah infinite loop dan hanya handle 401 untuk token expired
+    if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       
       if (typeof window !== 'undefined') {
-        // Jika sedang refreshing, queue request
         if (isRefreshing) {
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject })
@@ -80,7 +87,7 @@ api.interceptors.response.use(
             if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
               window.location.href = '/login'
             }
-            return
+            return Promise.reject(error)
           }
           
           const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
@@ -138,69 +145,50 @@ export const authAPI = {
 
 // ==================== GOOGLE OAUTH API ====================
 export const googleAPI = {
-  // Endpoint untuk mendapatkan URL login Google (redirect method)
-  getGoogleLoginUrl: () => {
-    console.log('[Google API] Getting Google login URL')
-    return api.get('/auth/google/login')
-  },
-  
-  // Endpoint untuk login dengan token (popup method)
   googleLogin: (idToken: string) => {
-    console.log('[Google API] Calling googleLogin with token, length:', idToken?.length)
+    console.log('[Google API] Calling googleLogin')
     if (!idToken) {
       console.error('[Google API] No token provided!')
       return Promise.reject(new Error('No token provided'))
     }
-    return api.post('/auth/google-login', { id_token: idToken })
+    return api.post('/auth/google/token', { id_token: idToken })
   },
-  
-  // Alias untuk backward compatibility
-  loginWithGoogleToken: (idToken: string) => {
-    console.log('[Google API] Calling loginWithGoogleToken (alias)')
-    return googleAPI.googleLogin(idToken)
-  },
-  
-  // Link dan unlink Google account
-  linkGoogle: (idToken: string) => {
-    console.log('[Google API] Calling linkGoogle')
-    return api.post('/auth/link-google', { id_token: idToken })
-  },
-  unlinkGoogle: () => {
-    console.log('[Google API] Calling unlinkGoogle')
-    return api.post('/auth/unlink-google')
-  },
+  linkGoogle: (idToken: string) => api.post('/auth/link-google', { id_token: idToken }),
+  unlinkGoogle: () => api.post('/auth/unlink-google'),
+}
+
+// ==================== JAPANESE READING API ====================
+export const readingAPI = {
+  getAll: (params?: any) => api.get('/reading/', { params }),
+  getById: (id: number) => api.get(`/reading/${id}`),
+  getBySlug: (slug: string) => api.get(`/reading/slug/${slug}`),
+  create: (data: any) => api.post('/reading/', data),
+  update: (id: number, data: any) => api.put(`/reading/${id}`, data),
+  delete: (id: number) => api.delete(`/reading/${id}`),
+  getBookmarks: () => api.get('/reading/bookmarks'),
+  addBookmark: (readingId: number, notes?: string) => 
+    api.post(`/reading/${readingId}/bookmark`, { notes }),
+  removeBookmark: (bookmarkId: number) => 
+    api.delete(`/reading/bookmarks/${bookmarkId}`),
+  getProgress: (readingId: number) => api.get(`/reading/${readingId}/progress`),
+  updateProgress: (readingId: number, data: any) => 
+    api.post(`/reading/${readingId}/progress`, data),
+  getStats: () => api.get('/reading/stats'),
 }
 
 // ==================== VOCABULARY API ====================
 export const vocabAPI = {
-  getAll: (params?: {
-    page?: number
-    per_page?: number
-    search?: string
-    jlpt_level?: string
-    kategori_id?: number
-    mastered_status?: string
-  }) => api.get('/vocab/', { params }),
+  getAll: (params?: any) => api.get('/vocab/', { params }),
   getById: (id: number) => api.get(`/vocab/${id}`),
   getByLevel: (level: string) => api.get(`/vocab/by-level/${level}`),
   getByCategory: (categoryId: number) => api.get(`/vocab/categories/${categoryId}`),
-  getMastered: (params?: { page?: number; per_page?: number }) =>
-    api.get('/vocab/mastered', { params }),
-  getNotMastered: (params?: { page?: number; per_page?: number }) =>
-    api.get('/vocab/not-mastered', { params }),
+  getMastered: (params?: any) => api.get('/vocab/mastered', { params }),
+  getNotMastered: (params?: any) => api.get('/vocab/not-mastered', { params }),
   toggleMastered: (id: number, mastered: boolean) =>
     api.post(`/vocab/toggle-mastered/${id}`, { mastered }),
   getMasteredStats: () => api.get('/vocab/mastered-stats'),
   search: (q: string, page?: number, per_page?: number) =>
     api.get('/vocab/search', { params: { q, page, per_page } }),
-  getWritingPractice: (level?: string, limit?: number) => {
-    const params = new URLSearchParams()
-    if (level) params.append('level', level)
-    if (limit) params.append('limit', limit.toString())
-    return api.get(`/vocab/writing-practice?${params.toString()}`)
-  },
-  submitWritingPractice: (data: { vocab_id: number; user_writing: string; is_correct: boolean }) =>
-    api.post('/vocab/writing-practice/submit', data),
   create: (data: any) => api.post('/vocab/', data),
   update: (id: number, data: any) => api.put(`/vocab/${id}`, data),
   delete: (id: number) => api.delete(`/vocab/${id}`),
@@ -208,13 +196,7 @@ export const vocabAPI = {
 
 // ==================== GRAMMAR API ====================
 export const grammarAPI = {
-  getAll: (params?: {
-    page?: number
-    per_page?: number
-    level?: string
-    category?: string
-    is_published?: number
-  }) => api.get('/grammar/', { params }),
+  getAll: (params?: any) => api.get('/grammar/', { params }),
   getById: (id: number) => api.get(`/grammar/${id}`),
   getBySlug: (slug: string) => api.get(`/grammar/slug/${slug}`),
   getByLevel: (level: string) => api.get(`/grammar/by-level/${level}`),
@@ -226,13 +208,7 @@ export const grammarAPI = {
 
 // ==================== ADMIN GRAMMAR API ====================
 export const adminGrammarAPI = {
-  getAll: (params?: {
-    page?: number
-    per_page?: number
-    level?: string
-    category?: string
-    is_published?: number
-  }) => api.get('/grammar/admin', { params }),
+  getAll: (params?: any) => api.get('/grammar/admin', { params }),
   getById: (id: number) => api.get(`/grammar/admin/${id}`),
   create: (data: any) => api.post('/grammar/admin', data),
   update: (id: number, data: any) => api.put(`/grammar/admin/${id}`, data),
@@ -254,50 +230,33 @@ export const adminGrammarAPI = {
 export const studyAPI = {
   getProgress: () => api.get('/study/progress'),
   getProgressByVocab: (vocabId: number) => api.get(`/study/progress/${vocabId}`),
-  updateProgress: (data: { vocab_id: number; is_correct: boolean }) =>
-    api.post('/study/progress', data),
+  updateProgress: (data: any) => api.post('/study/progress', data),
   resetProgress: (vocabId: number) => api.post(`/study/progress/${vocabId}/reset`),
   markMastered: (vocabId: number, mastered: boolean) =>
     api.post(`/study/progress/${vocabId}/mastered`, { mastered }),
   getStats: () => api.get('/study/stats'),
   getStatsByLevel: () => api.get('/study/stats/by-level'),
-  getRecommendations: (params?: { limit?: number; level?: string }) =>
-    api.get('/study/recommendations', { params }),
+  getRecommendations: (params?: any) => api.get('/study/recommendations', { params }),
   getDashboard: () => api.get('/study/dashboard'),
   getStreak: () => api.get('/study/streak'),
   getStreakCalendar: () => api.get('/study/streak-calendar'),
-  getReminderSettings: () => api.get('/study/reminder/settings'),
-  updateReminderSettings: (data: { enabled: boolean; time?: string }) =>
-    api.post('/study/reminder/settings', data),
-  sendReminderNow: () => api.post('/study/reminder/send-now'),
-  sendReminder: () => api.post('/study/send-reminder'),
 }
 
 // ==================== CHAT API ====================
 export const chatAPI = {
   getInfo: () => api.get('/chat/info'),
-  getMessages: (params?: {
-    page?: number
-    per_page?: number
-    before?: string
-    after?: string
-    search?: string
-  }) => api.get('/chat/messages', { params }),
-  sendMessage: (data: { message: string; reply_to_id?: number }) =>
-    api.post('/chat/messages', data),
+  getMessages: (params?: any) => api.get('/chat/messages', { params }),
+  sendMessage: (data: any) => api.post('/chat/messages', data),
   editMessage: (messageId: number, message: string) =>
     api.put(`/chat/messages/${messageId}`, { message }),
   deleteMessage: (messageId: number) => api.delete(`/chat/messages/${messageId}`),
-  getMentions: (params?: { is_read?: number; page?: number; per_page?: number }) =>
-    api.get('/chat/mentions', { params }),
+  getMentions: (params?: any) => api.get('/chat/mentions', { params }),
   markMentionRead: (mentionId: number) => api.patch(`/chat/mentions/${mentionId}/read`),
   markAllMentionsRead: () => api.post('/chat/mentions/read-all'),
-  getReplyNotifications: (params?: { is_read?: number; page?: number; per_page?: number }) =>
-    api.get('/chat/reply-notifications', { params }),
+  getReplyNotifications: (params?: any) => api.get('/chat/reply-notifications', { params }),
   markReplyNotificationRead: (notifId: number) => 
     api.patch(`/chat/reply-notifications/${notifId}/read`),
-  markAllReplyNotificationsRead: () => 
-    api.post('/chat/reply-notifications/read-all'),
+  markAllReplyNotificationsRead: () => api.post('/chat/reply-notifications/read-all'),
   getNotificationSummary: () => api.get('/chat/notifications/summary'),
   markAllAsRead: () => api.post('/chat/read-all'),
   searchUsers: (q: string) => api.get('/chat/users/search', { params: { q } }),
@@ -305,8 +264,7 @@ export const chatAPI = {
 
 // ==================== USER API ====================
 export const userAPI = {
-  getAll: (params?: { page?: number; per_page?: number }) =>
-    api.get('/users/', { params }),
+  getAll: (params?: any) => api.get('/users/', { params }),
   getByUsername: (username: string) => api.get(`/users/${username}`),
   getBySlug: (slug: string) => api.get(`/users/by-slug/${slug}`),
   updateUser: (username: string, data: any) => api.put(`/users/${username}`, data),
@@ -339,9 +297,8 @@ export const categoryAPI = {
   getById: (id: number) => api.get(`/categories/${id}`),
   getBySlug: (slug: string) => api.get(`/categories/by-slug/${slug}`),
   getWithCount: () => api.get('/categories/with-count'),
-  create: (data: { name: string; slug?: string }) => api.post('/categories/', data),
-  update: (id: number, data: { name?: string; slug?: string }) => 
-    api.put(`/categories/${id}`, data),
+  create: (data: any) => api.post('/categories/', data),
+  update: (id: number, data: any) => api.put(`/categories/${id}`, data),
   delete: (id: number) => api.delete(`/categories/${id}`),
 }
 
@@ -368,21 +325,18 @@ export const bookmarkAPI = {
 
 // ==================== ADMIN API ====================
 export const adminAPI = {
-  getUsers: (params?: { page?: number; per_page?: number; search?: string; role?: string; is_verified?: number }) =>
-    api.get('/admin/users', { params }),
+  getUsers: (params?: any) => api.get('/admin/users', { params }),
   getUserByUsername: (username: string) => api.get(`/admin/users/${username}`),
   updateUser: (username: string, data: any) => api.put(`/admin/users/${username}`, data),
   deleteUser: (username: string) => api.delete(`/admin/users/${username}`),
   changeUserRole: (username: string, role: string) => 
     api.patch(`/admin/users/${username}/role`, { role }),
   getStats: () => api.get('/admin/stats'),
-  getVocab: (params?: { page?: number; per_page?: number; search?: string; jlpt_level?: string }) =>
-    api.get('/admin/vocab', { params }),
+  getVocab: (params?: any) => api.get('/admin/vocab', { params }),
   createVocab: (data: any) => api.post('/admin/vocab', data),
   updateVocab: (id: number, data: any) => api.put(`/admin/vocab/${id}`, data),
   deleteVocab: (id: number) => api.delete(`/admin/vocab/${id}`),
-  getGrammar: (params?: { page?: number; per_page?: number; level?: string; category?: string; is_published?: number }) =>
-    adminGrammarAPI.getAll(params),
+  getGrammar: (params?: any) => adminGrammarAPI.getAll(params),
   getGrammarById: (id: number) => adminGrammarAPI.getById(id),
   createGrammar: (data: any) => adminGrammarAPI.create(data),
   updateGrammar: (id: number, data: any) => adminGrammarAPI.update(id, data),
@@ -391,20 +345,21 @@ export const adminAPI = {
   uploadGrammarThumbnail: (file: File) => adminGrammarAPI.uploadThumbnail(file),
   deleteGrammarThumbnail: (filename: string) => adminGrammarAPI.deleteThumbnail(filename),
   getCategories: () => api.get('/admin/categories'),
-  createCategory: (data: { name: string; slug?: string }) => api.post('/admin/categories', data),
-  updateCategory: (id: number, data: { name?: string; slug?: string }) => 
-    api.put(`/admin/categories/${id}`, data),
+  createCategory: (data: any) => api.post('/admin/categories', data),
+  updateCategory: (id: number, data: any) => api.put(`/admin/categories/${id}`, data),
   deleteCategory: (id: number) => api.delete(`/admin/categories/${id}`),
   checkStreaks: () => api.post('/admin/check-streaks'),
   checkReminders: () => api.post('/admin/check-reminders'),
 }
 
 // Helper untuk mendapatkan URL gambar
-export const getImageUrl = (path: string | null | undefined, type: 'avatar' | 'cover' | 'grammar' = 'avatar'): string => {
+export const getImageUrl = (path: string | null | undefined, type: 'avatar' | 'cover' | 'grammar' | 'reading' = 'avatar'): string => {
   if (!path) {
     if (type === 'avatar') return '/default-avatar.jpg'
     if (type === 'cover') return '/default-cover.jpg'
-    return '/default-grammar.jpg'
+    if (type === 'grammar') return '/default-grammar.jpg'
+    if (type === 'reading') return '/default-reading.jpg'
+    return '/default-image.jpg'
   }
   
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
@@ -414,21 +369,17 @@ export const getImageUrl = (path: string | null | undefined, type: 'avatar' | 'c
   if (type === 'avatar') return `${baseUrl}/uploads/avatars/${path}`
   if (type === 'cover') return `${baseUrl}/uploads/covers/${path}`
   if (type === 'grammar') return `${baseUrl}/uploads/grammar/${path}`
+  if (type === 'reading') return `${baseUrl}/uploads/readings/${path}`
   
   return `${baseUrl}/uploads/${path}`
 }
 
 export const getGrammarThumbnailUrl = (thumbnail: string | null | undefined): string => {
-  if (!thumbnail) return '/default-grammar.jpg'
-  
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
-  
-  if (thumbnail.startsWith('http')) return thumbnail
-  if (thumbnail.includes('grammar/')) {
-    return `${baseUrl}/${thumbnail}`
-  }
-  
-  return `${baseUrl}/uploads/grammar/${thumbnail}`
+  return getImageUrl(thumbnail, 'grammar')
+}
+
+export const getReadingThumbnailUrl = (thumbnail: string | null | undefined): string => {
+  return getImageUrl(thumbnail, 'reading')
 }
 
 export default api

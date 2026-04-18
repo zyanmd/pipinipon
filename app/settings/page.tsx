@@ -25,12 +25,22 @@ import {
   Save,
   Eye,
   EyeOff,
-  Image as ImageIcon
+  Image as ImageIcon,
+  AlertTriangle,
+  CheckCircle
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { getAvatarUrl, getCoverUrl } from "@/lib/image-helper"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // Interface untuk user dengan properti tambahan
 interface ExtendedUser {
@@ -88,6 +98,11 @@ export default function SettingsPage() {
   const [showCoverCropper, setShowCoverCropper] = useState(false)
   const [tempCoverImage, setTempCoverImage] = useState<string | null>(null)
   const [coverError, setCoverError] = useState(false)
+
+  // Delete account confirmation
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Cast user ke ExtendedUser
   const extendedUser = user as ExtendedUser | null
@@ -322,29 +337,45 @@ export default function SettingsPage() {
     }
   }
 
+  // PERBAIKAN: Hapus akun langsung tanpa verifikasi password
   const handleDeleteAccount = async () => {
-    if (!confirm("Apakah Anda yakin ingin menghapus akun? Tindakan ini tidak dapat dibatalkan.")) return
-    if (!confirm("Semua data Anda akan hilang permanen. Apakah Anda benar-benar yakin?")) return
-    
-    setLoading(true)
+    setDeleteLoading(true)
     
     try {
-      await userAPI.deleteMyAccount()
-      logout()
-      router.push("/")
-      toast({
-        title: "Akun dihapus",
-        description: "Akun Anda telah berhasil dihapus.",
-      })
+      const response = await userAPI.deleteMyAccount()
+      
+      if (response.data.success) {
+        logout()
+        router.push("/")
+        toast({
+          title: "Akun dihapus",
+          description: "Akun Anda telah berhasil dihapus.",
+        })
+      } else {
+        throw new Error(response.data.error || "Gagal menghapus akun")
+      }
     } catch (error: any) {
+      console.error("Delete account error:", error)
       toast({
         title: "Gagal hapus akun",
         description: error.response?.data?.error || "Terjadi kesalahan",
         variant: "destructive",
       })
-      setLoading(false)
+      setDeleteLoading(false)
     }
   }
+
+  const openDeleteDialog = () => {
+    setDeleteConfirmText("")
+    setShowDeleteDialog(true)
+  }
+
+  const closeDeleteDialog = () => {
+    setShowDeleteDialog(false)
+    setDeleteConfirmText("")
+  }
+
+  const isDeleteEnabled = deleteConfirmText === "HAPUS AKUN"
 
   if (!user) {
     return null
@@ -380,6 +411,70 @@ export default function SettingsPage() {
         aspectRatio={1200 / 300}
         title="Crop Cover Photo"
       />
+
+      {/* Delete Account Confirmation Dialog - Sederhana */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Hapus Akun Permanen
+            </DialogTitle>
+            <DialogDescription>
+              Tindakan ini tidak dapat dibatalkan. Akun Anda akan dihapus permanen beserta semua data.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                Data yang akan hilang:
+              </p>
+              <ul className="text-xs text-red-500 dark:text-red-300 mt-2 space-y-1 list-disc list-inside">
+                <li>Profil dan informasi akun</li>
+                <li>Progress belajar dan streak</li>
+                <li>Bookmark dan favorit</li>
+                <li>Pesan chat dan mention</li>
+                <li>Riwayat membaca artikel</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-text">
+                Ketik <span className="font-mono font-bold text-red-600">HAPUS AKUN</span> untuk konfirmasi
+              </Label>
+              <Input
+                id="confirm-text"
+                type="text"
+                placeholder="HAPUS AKUN"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="font-mono"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteLoading}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={!isDeleteEnabled || deleteLoading}
+            >
+              {deleteLoading ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Menghapus...
+                </>
+              ) : (
+                "Hapus Permanen"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -679,13 +774,16 @@ export default function SettingsPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
-                  <h3 className="font-semibold text-red-600 dark:text-red-400 mb-2">Hapus Akun</h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    <h3 className="font-semibold text-red-600 dark:text-red-400">Hapus Akun</h3>
+                  </div>
                   <p className="text-sm text-muted-foreground mb-4">
                     Setelah akun Anda dihapus, semua data akan hilang permanen. Tindakan ini tidak dapat dibatalkan.
                   </p>
                   <Button
                     variant="destructive"
-                    onClick={handleDeleteAccount}
+                    onClick={openDeleteDialog}
                     disabled={loading}
                   >
                     Hapus Akun Saya

@@ -1,68 +1,35 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { adminAPI, getGrammarThumbnailUrl } from "@/lib/api"
+import { adminAPI, readingAPI } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/use-toast"
+import { motion } from "framer-motion"
 import { 
   Users, 
   BookOpen, 
   GraduationCap, 
   Tags, 
-  TrendingUp, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  EyeOff,
-  Search,
   Shield,
   UserCheck,
-  Loader2,
-  ImageIcon,
-  Upload,
-  X,
-  PlusCircle,
-  MinusCircle
+  Newspaper
 } from "lucide-react"
-import { motion } from "framer-motion"
-import { cn } from "@/lib/utils"
 
-// Helper untuk mendapatkan URL thumbnail
-const getThumbnailUrl = (thumbnail: string | null | undefined): string | null => {
-  if (!thumbnail) return null
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
-  if (thumbnail.includes('grammar/')) {
-    return `${baseUrl}/uploads/${thumbnail}`
-  }
-  return `${baseUrl}/uploads/grammar/${thumbnail}`
-}
-
-// Type untuk contoh kalimat
-interface ExampleSentence {
-  japanese: string
-  indonesian: string
-  romaji?: string
-}
-
-// Type untuk percakapan
-interface Conversation {
-  speaker: string
-  japanese: string
-  indonesian: string
-  romaji?: string
-}
+// Import komponen yang sudah dipisah
+import { AdminDashboard } from "@/components/admin/AdminDashboard"
+import { AdminUsers } from "@/components/admin/AdminUsers"
+import { AdminVocabulary } from "@/components/admin/AdminVocabulary"
+import { AdminGrammar } from "@/components/admin/AdminGrammar"
+import { AdminReading } from "@/components/admin/AdminReading"
+import { AdminCategories } from "@/components/admin/AdminCategories"
+import { VocabDialog } from "@/components/admin/dialogs/VocabDialog"
+import { GrammarDialog } from "@/components/admin/dialogs/GrammarDialog"
+import { ReadingDialog } from "@/components/admin/dialogs/ReadingDialog"
+import { CategoryDialog } from "@/components/admin/dialogs/CategoryDialog"
 
 export default function AdminPage() {
   const { user, isLoading } = useAuth()
@@ -71,50 +38,25 @@ export default function AdminPage() {
   const [usersPagination, setUsersPagination] = useState<any>({})
   const [vocab, setVocab] = useState<any[]>([])
   const [grammar, setGrammar] = useState<any[]>([])
+  const [readings, setReadings] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [activeTab, setActiveTab] = useState("dashboard")
   
-  // Grammar thumbnail
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
-  const [uploadingThumbnail, setUploadingThumbnail] = useState(false)
-  
-  // Grammar contoh kalimat dan percakapan
-  const [exampleSentences, setExampleSentences] = useState<ExampleSentence[]>([
-    { japanese: "", indonesian: "", romaji: "" }
-  ])
-  const [conversations, setConversations] = useState<Conversation[]>([
-    { speaker: "", japanese: "", indonesian: "", romaji: "" }
-  ])
-  
   // Dialog states
-  const [showUserDialog, setShowUserDialog] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<any>(null)
-  
   const [showVocabDialog, setShowVocabDialog] = useState(false)
   const [selectedVocab, setSelectedVocab] = useState<any>(null)
-  const [vocabForm, setVocabForm] = useState({
-    kanji: "", hiragana: "", romaji: "", arti: "",
-    contoh_kalimat: "", contoh_arti: "", jlpt_level: "N5", kategori_id: ""
-  })
   
   const [showGrammarDialog, setShowGrammarDialog] = useState(false)
   const [selectedGrammar, setSelectedGrammar] = useState<any>(null)
-  const [grammarForm, setGrammarForm] = useState({
-    title: "", pattern: "", meaning: "", explanation: "",
-    level: "N5", category: "", is_published: 0,
-    thumbnail: "", thumbnail_alt: "", notes: ""
-  })
+  
+  const [showReadingDialog, setShowReadingDialog] = useState(false)
+  const [selectedReading, setSelectedReading] = useState<any>(null)
   
   const [showCategoryDialog, setShowCategoryDialog] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<any>(null)
-  const [categoryForm, setCategoryForm] = useState({ name: "", slug: "" })
-  
-  const [submitting, setSubmitting] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Check if user is admin
   if (!isLoading && user?.role !== "admin") {
@@ -137,324 +79,52 @@ export default function AdminPage() {
   }
 
   // Fetch data
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const [statsRes, usersRes, vocabRes, grammarRes, categoriesRes] = await Promise.all([
-          adminAPI.getStats(),
-          adminAPI.getUsers({ page: currentPage, search: searchTerm }),
-          adminAPI.getVocab({ page: 1, per_page: 50 }),
-          adminAPI.getGrammar({ page: 1, per_page: 50 }),
-          adminAPI.getCategories()
-        ])
-        
-        setAdminStats(statsRes.data.data)
-        setUsers(usersRes.data.data.users)
-        setUsersPagination(usersRes.data.data.pagination)
-        setVocab(vocabRes.data.data.vocab)
-        setGrammar(grammarRes.data.data.grammar)
-        setCategories(categoriesRes.data.data.categories)
-      } catch (error) {
-        console.error("Error fetching admin data:", error)
-        toast({ title: "Error", description: "Gagal memuat data admin", variant: "destructive" })
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [statsRes, usersRes, vocabRes, grammarRes, categoriesRes, readingsRes] = await Promise.all([
+        adminAPI.getStats(),
+        adminAPI.getUsers({ page: currentPage, search: searchTerm }),
+        adminAPI.getVocab({ page: 1, per_page: 50 }),
+        adminAPI.getGrammar({ page: 1, per_page: 50 }),
+        adminAPI.getCategories(),
+        readingAPI.getAll({ page: 1, per_page: 50, published_only: false })
+      ])
+      
+      setAdminStats(statsRes.data.data)
+      setUsers(usersRes.data.data.users)
+      setUsersPagination(usersRes.data.data.pagination)
+      setVocab(vocabRes.data.data.vocab)
+      setGrammar(grammarRes.data.data.grammar)
+      setCategories(categoriesRes.data.data.categories)
+      setReadings(readingsRes.data.data.readings || [])
+    } catch (error) {
+      console.error("Error fetching admin data:", error)
+      toast({ title: "Error", description: "Gagal memuat data admin", variant: "destructive" })
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchData()
   }, [currentPage, searchTerm])
 
-  // Parse JSON fields for editing
-  const parseJsonField = (field: any) => {
-    if (!field) return []
-    if (typeof field === 'string') {
-      try {
-        return JSON.parse(field)
-      } catch {
-        return []
-      }
-    }
-    return field
-  }
-
-  // Handle grammar form open for edit
-  const handleEditGrammar = (grammarItem: any) => {
-    setSelectedGrammar(grammarItem)
-    setGrammarForm({
-      title: grammarItem.title || "",
-      pattern: grammarItem.pattern || "",
-      meaning: grammarItem.meaning || "",
-      explanation: grammarItem.explanation || "",
-      level: grammarItem.level || "N5",
-      category: grammarItem.category || "",
-      is_published: grammarItem.is_published || 0,
-      thumbnail: grammarItem.thumbnail || "",
-      thumbnail_alt: grammarItem.thumbnail_alt || "",
-      notes: grammarItem.notes || ""
-    })
-    
-    // Parse contoh kalimat
-    const parsedExamples = parseJsonField(grammarItem.example_sentences)
-    if (parsedExamples.length > 0) {
-      setExampleSentences(parsedExamples)
-    } else {
-      setExampleSentences([{ japanese: "", indonesian: "", romaji: "" }])
-    }
-    
-    // Parse percakapan
-    const parsedConversations = parseJsonField(grammarItem.conversations)
-    if (parsedConversations.length > 0) {
-      setConversations(parsedConversations)
-    } else {
-      setConversations([{ speaker: "", japanese: "", indonesian: "", romaji: "" }])
-    }
-    
-    const thumbnailUrl = getThumbnailUrl(grammarItem.thumbnail)
-    setThumbnailPreview(thumbnailUrl)
-    setThumbnailFile(null)
-    setShowGrammarDialog(true)
-  }
-
-  // Handle grammar form close
-  const handleGrammarDialogClose = () => {
-    setShowGrammarDialog(false)
-    setSelectedGrammar(null)
-    setGrammarForm({
-      title: "", pattern: "", meaning: "", explanation: "",
-      level: "N5", category: "", is_published: 0,
-      thumbnail: "", thumbnail_alt: "", notes: ""
-    })
-    setExampleSentences([{ japanese: "", indonesian: "", romaji: "" }])
-    setConversations([{ speaker: "", japanese: "", indonesian: "", romaji: "" }])
-    setThumbnailPreview(null)
-    setThumbnailFile(null)
-  }
-
-  // Add example sentence
-  const addExampleSentence = () => {
-    setExampleSentences([...exampleSentences, { japanese: "", indonesian: "", romaji: "" }])
-  }
-
-  // Remove example sentence
-  const removeExampleSentence = (index: number) => {
-    setExampleSentences(exampleSentences.filter((_, i) => i !== index))
-  }
-
-  // Update example sentence
-  const updateExampleSentence = (index: number, field: keyof ExampleSentence, value: string) => {
-    const updated = [...exampleSentences]
-    updated[index][field] = value
-    setExampleSentences(updated)
-  }
-
-  // Add conversation
-  const addConversation = () => {
-    setConversations([...conversations, { speaker: "", japanese: "", indonesian: "", romaji: "" }])
-  }
-
-  // Remove conversation
-  const removeConversation = (index: number) => {
-    setConversations(conversations.filter((_, i) => i !== index))
-  }
-
-  // Update conversation
-  const updateConversation = (index: number, field: keyof Conversation, value: string) => {
-    const updated = [...conversations]
-    updated[index][field] = value
-    setConversations(updated)
-  }
-
-  // Handle thumbnail selection
-  const handleThumbnailSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast({ title: "Error", description: "File terlalu besar. Maksimal 5MB", variant: "destructive" })
-        return
-      }
-      if (!file.type.startsWith("image/")) {
-        toast({ title: "Error", description: "File harus berupa gambar", variant: "destructive" })
-        return
-      }
-      setThumbnailFile(file)
-      setThumbnailPreview(URL.createObjectURL(file))
-    }
-  }
-
-  // Upload thumbnail to server
-  const uploadThumbnail = async (file: File): Promise<string | null> => {
-    try {
-      const response = await adminAPI.uploadGrammarThumbnail(file)
-      if (response.data.success) {
-        return response.data.data.filename
-      }
-      return null
-    } catch (error) {
-      console.error("Error uploading thumbnail:", error)
-      return null
-    }
-  }
-
-  // Remove thumbnail
-  const removeThumbnail = () => {
-    setThumbnailFile(null)
-    setThumbnailPreview(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-  }
-
-  // Save grammar
-  const handleSaveGrammar = async () => {
-    if (!grammarForm.title || !grammarForm.pattern || !grammarForm.meaning) {
-      toast({ title: "Error", description: "Title, Pattern, dan Meaning wajib diisi", variant: "destructive" })
-      return
-    }
-
-    setSubmitting(true)
-    setUploadingThumbnail(true)
-
-    try {
-      let thumbnailUrl = grammarForm.thumbnail
-      
-      // Upload thumbnail if new file selected
-      if (thumbnailFile) {
-        const uploadedFilename = await uploadThumbnail(thumbnailFile)
-        if (uploadedFilename) {
-          thumbnailUrl = uploadedFilename
-        } else {
-          toast({ title: "Error", description: "Gagal upload thumbnail", variant: "destructive" })
-          setSubmitting(false)
-          setUploadingThumbnail(false)
-          return
-        }
-      }
-
-      // Filter empty example sentences
-      const validExamples = exampleSentences.filter(ex => ex.japanese.trim() && ex.indonesian.trim())
-      // Filter empty conversations
-      const validConversations = conversations.filter(conv => conv.speaker.trim() && conv.japanese.trim() && conv.indonesian.trim())
-
-      const grammarData = {
-        ...grammarForm,
-        thumbnail: thumbnailUrl,
-        example_sentences: JSON.stringify(validExamples),
-        conversations: JSON.stringify(validConversations)
-      }
-
-      if (selectedGrammar) {
-        await adminAPI.updateGrammar(selectedGrammar.id, grammarData)
-        toast({ title: "Success", description: "Grammar updated successfully" })
-      } else {
-        await adminAPI.createGrammar(grammarData)
-        toast({ title: "Success", description: "Grammar created successfully" })
-      }
-
-      // Refresh grammar list
-      const grammarRes = await adminAPI.getGrammar({ page: 1, per_page: 50 })
-      setGrammar(grammarRes.data.data.grammar)
-      handleGrammarDialogClose()
-    } catch (error: any) {
-      console.error("Error saving grammar:", error)
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to save grammar", variant: "destructive" })
-    } finally {
-      setSubmitting(false)
-      setUploadingThumbnail(false)
-    }
-  }
-
-  // Stats cards
   const statsCards = adminStats ? [
     { title: "Total Users", value: adminStats.users.total, icon: Users, color: "from-blue-500 to-cyan-500" },
     { title: "Total Admin", value: adminStats.users.admins, icon: Shield, color: "from-purple-500 to-pink-500" },
     { title: "Verified Users", value: adminStats.users.verified, icon: UserCheck, color: "from-green-500 to-emerald-500" },
     { title: "Kosakata", value: adminStats.content.vocabulary, icon: BookOpen, color: "from-orange-500 to-red-500" },
     { title: "Tata Bahasa", value: adminStats.content.grammar, icon: GraduationCap, color: "from-teal-500 to-green-500" },
+    { title: "Reading", value: readings.length, icon: Newspaper, color: "from-cyan-500 to-blue-500" },
     { title: "Kategori", value: adminStats.content.categories, icon: Tags, color: "from-indigo-500 to-purple-500" },
   ] : []
-
-  // Handle user role update
-  const handleUpdateUserRole = async (username: string, role: string) => {
-    try {
-      await adminAPI.changeUserRole(username, role)
-      toast({ title: "Success", description: `User role updated to ${role}` })
-      const usersRes = await adminAPI.getUsers({ page: currentPage, search: searchTerm })
-      setUsers(usersRes.data.data.users)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to update role", variant: "destructive" })
-    }
-  }
-
-  // Handle delete user
-  const handleDeleteUser = async (username: string) => {
-    if (!confirm(`Are you sure you want to delete user "${username}"?`)) return
-    try {
-      await adminAPI.deleteUser(username)
-      toast({ title: "Success", description: "User deleted successfully" })
-      const usersRes = await adminAPI.getUsers({ page: currentPage, search: searchTerm })
-      setUsers(usersRes.data.data.users)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to delete user", variant: "destructive" })
-    }
-  }
-
-  // Handle delete vocab
-  const handleDeleteVocab = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this vocabulary?")) return
-    try {
-      await adminAPI.deleteVocab(id)
-      toast({ title: "Success", description: "Vocabulary deleted successfully" })
-      const vocabRes = await adminAPI.getVocab({ page: 1, per_page: 50 })
-      setVocab(vocabRes.data.data.vocab)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to delete", variant: "destructive" })
-    }
-  }
-
-  // Handle delete grammar
-  const handleDeleteGrammar = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this grammar?")) return
-    try {
-      await adminAPI.deleteGrammar(id)
-      toast({ title: "Success", description: "Grammar deleted successfully" })
-      const grammarRes = await adminAPI.getGrammar({ page: 1, per_page: 50 })
-      setGrammar(grammarRes.data.data.grammar)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to delete", variant: "destructive" })
-    }
-  }
-
-  // Handle publish grammar
-  const handlePublishGrammar = async (id: number, isPublished: boolean) => {
-    try {
-      await adminAPI.publishGrammar(id, isPublished)
-      toast({ title: "Success", description: `Grammar ${isPublished ? "published" : "unpublished"}` })
-      const grammarRes = await adminAPI.getGrammar({ page: 1, per_page: 50 })
-      setGrammar(grammarRes.data.data.grammar)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to update", variant: "destructive" })
-    }
-  }
-
-  // Handle delete category
-  const handleDeleteCategory = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this category?")) return
-    try {
-      await adminAPI.deleteCategory(id)
-      toast({ title: "Success", description: "Category deleted successfully" })
-      const categoriesRes = await adminAPI.getCategories()
-      setCategories(categoriesRes.data.data.categories)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.error || "Failed to delete", variant: "destructive" })
-    }
-  }
 
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)}
+          {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)}
         </div>
         <Skeleton className="h-96 w-full rounded-lg" />
       </div>
@@ -469,7 +139,7 @@ export default function AdminPage() {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {statsCards.map((stat, i) => (
           <motion.div key={stat.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card>
@@ -489,638 +159,112 @@ export default function AdminPage() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="vocabulary">Vocabulary</TabsTrigger>
           <TabsTrigger value="grammar">Grammar</TabsTrigger>
+          <TabsTrigger value="reading">Reading</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
         </TabsList>
 
-        {/* Dashboard Tab */}
         <TabsContent value="dashboard">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Statistik Belajar</CardTitle>
-                <CardDescription>Ringkasan aktivitas belajar pengguna</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span>Total Sesi Belajar</span>
-                  <span className="font-bold text-lg">{adminStats?.study?.total_sessions || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Kosakata Dihafal</span>
-                  <span className="font-bold text-lg">{adminStats?.study?.mastered_items || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Tingkat Penguasaan</span>
-                  <span className="font-bold text-lg">{adminStats?.study?.mastery_rate || 0}%</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full" style={{ width: `${adminStats?.study?.mastery_rate || 0}%` }} />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Statistik Pengguna</CardTitle>
-                <CardDescription>Informasi tentang pengguna platform</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span>Total Pengguna</span>
-                  <span className="font-bold text-lg">{adminStats?.users?.total || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Admin</span>
-                  <span className="font-bold text-lg">{adminStats?.users?.admins || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Terverifikasi</span>
-                  <span className="font-bold text-lg">{adminStats?.users?.verified || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Bergabung 7 hari terakhir</span>
-                  <span className="font-bold text-lg">{adminStats?.users?.recent_7days || 0}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <AdminDashboard adminStats={adminStats} />
         </TabsContent>
 
-        {/* Users Tab */}
         <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <CardTitle>Manajemen Pengguna</CardTitle>
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Cari pengguna..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Username</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>XP</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((u) => (
-                      <TableRow key={u.id}>
-                        <TableCell>{u.id}</TableCell>
-                        <TableCell className="font-medium">{u.username}</TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell>
-                          <Select defaultValue={u.role} onValueChange={(v) => handleUpdateUserRole(u.username, v)}>
-                            <SelectTrigger className="w-24">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="user">User</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          {u.is_verified === 1 ? (
-                            <Badge variant="default" className="bg-green-500">Verified</Badge>
-                          ) : (
-                            <Badge variant="secondary">Unverified</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{u.xp || 0}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteUser(u.username)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {usersPagination.pages > 1 && (
-                <div className="flex justify-center gap-2 mt-4">
-                  <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Previous</Button>
-                  <span className="py-2 px-3 text-sm">Page {currentPage} of {usersPagination.pages}</span>
-                  <Button variant="outline" size="sm" disabled={currentPage === usersPagination.pages} onClick={() => setCurrentPage(p => p + 1)}>Next</Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <AdminUsers 
+            users={users}
+            pagination={usersPagination}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            onRefresh={fetchData}
+          />
         </TabsContent>
 
-        {/* Vocabulary Tab */}
         <TabsContent value="vocabulary">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <CardTitle>Manajemen Kosakata</CardTitle>
-                <Button variant="japanese" size="sm" onClick={() => setShowVocabDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Tambah Kosakata
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Kanji</TableHead>
-                      <TableHead>Hiragana</TableHead>
-                      <TableHead>Arti</TableHead>
-                      <TableHead>Level</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {vocab.map((v) => (
-                      <TableRow key={v.id}>
-                        <TableCell>{v.id}</TableCell>
-                        <TableCell className="font-japanese">{v.kanji}</TableCell>
-                        <TableCell className="font-japanese">{v.hiragana}</TableCell>
-                        <TableCell>{v.arti}</TableCell>
-                        <TableCell><Badge variant="outline">{v.jlpt_level}</Badge></TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteVocab(v.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <AdminVocabulary 
+            vocab={vocab}
+            onRefresh={fetchData}
+            onAdd={() => setShowVocabDialog(true)}
+          />
         </TabsContent>
 
-        {/* Grammar Tab */}
         <TabsContent value="grammar">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Manajemen Tata Bahasa</CardTitle>
-                <Button variant="japanese" size="sm" onClick={() => {
-                  setSelectedGrammar(null)
-                  setGrammarForm({ title: "", pattern: "", meaning: "", explanation: "", level: "N5", category: "", is_published: 0, thumbnail: "", thumbnail_alt: "", notes: "" })
-                  setExampleSentences([{ japanese: "", indonesian: "", romaji: "" }])
-                  setConversations([{ speaker: "", japanese: "", indonesian: "", romaji: "" }])
-                  setThumbnailPreview(null)
-                  setThumbnailFile(null)
-                  setShowGrammarDialog(true)
-                }}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Tambah Grammar
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Thumbnail</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Pattern</TableHead>
-                      <TableHead>Level</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {grammar.map((g) => (
-                      <TableRow key={g.id}>
-                        <TableCell>{g.id}</TableCell>
-                        <TableCell>
-                          {g.thumbnail ? (
-                            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted">
-                              <img 
-                                src={getThumbnailUrl(g.thumbnail) || ''} 
-                                alt={g.title}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  console.error("Thumbnail failed to load:", getThumbnailUrl(g.thumbnail))
-                                  e.currentTarget.style.display = 'none'
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
-                              <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-medium max-w-[200px] truncate">{g.title}</TableCell>
-                        <TableCell className="font-japanese max-w-[150px] truncate">{g.pattern}</TableCell>
-                        <TableCell><Badge variant="outline">{g.level}</Badge></TableCell>
-                        <TableCell>
-                          {g.is_published === 1 ? (
-                            <Badge className="bg-green-500">Published</Badge>
-                          ) : (
-                            <Badge variant="secondary">Draft</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditGrammar(g)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handlePublishGrammar(g.id, g.is_published !== 1)}>
-                              {g.is_published === 1 ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteGrammar(g.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <AdminGrammar 
+            grammar={grammar}
+            onRefresh={fetchData}
+            onAdd={() => setShowGrammarDialog(true)}
+            onEdit={(g) => {
+              setSelectedGrammar(g)
+              setShowGrammarDialog(true)
+            }}
+          />
         </TabsContent>
 
-        {/* Categories Tab */}
+        <TabsContent value="reading">
+          <AdminReading 
+            readings={readings}
+            onRefresh={fetchData}
+            onAdd={() => setShowReadingDialog(true)}
+            onEdit={(r) => {
+              setSelectedReading(r)
+              setShowReadingDialog(true)
+            }}
+          />
+        </TabsContent>
+
         <TabsContent value="categories">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Manajemen Kategori</CardTitle>
-                <Button variant="japanese" size="sm" onClick={() => setShowCategoryDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Tambah Kategori
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Nama</TableHead>
-                      <TableHead>Slug</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categories.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell>{c.id}</TableCell>
-                        <TableCell>{c.name}</TableCell>
-                        <TableCell>{c.slug}</TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDeleteCategory(c.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <AdminCategories 
+            categories={categories}
+            onRefresh={fetchData}
+            onAdd={() => setShowCategoryDialog(true)}
+          />
         </TabsContent>
       </Tabs>
 
-      {/* Vocabulary Dialog */}
-      <Dialog open={showVocabDialog} onOpenChange={setShowVocabDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedVocab ? "Edit Kosakata" : "Tambah Kosakata Baru"}</DialogTitle>
-            <DialogDescription>Isi informasi kosakata di bawah ini.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Kanji</Label><Input value={vocabForm.kanji} onChange={(e) => setVocabForm({ ...vocabForm, kanji: e.target.value })} /></div>
-              <div><Label>Hiragana</Label><Input value={vocabForm.hiragana} onChange={(e) => setVocabForm({ ...vocabForm, hiragana: e.target.value })} /></div>
-            </div>
-            <div><Label>Arti</Label><Input value={vocabForm.arti} onChange={(e) => setVocabForm({ ...vocabForm, arti: e.target.value })} /></div>
-            <div><Label>Contoh Kalimat</Label><Textarea value={vocabForm.contoh_kalimat} onChange={(e) => setVocabForm({ ...vocabForm, contoh_kalimat: e.target.value })} /></div>
-            <div><Label>Arti Contoh</Label><Input value={vocabForm.contoh_arti} onChange={(e) => setVocabForm({ ...vocabForm, contoh_arti: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>JLPT Level</Label>
-                <Select value={vocabForm.jlpt_level} onValueChange={(v) => setVocabForm({ ...vocabForm, jlpt_level: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="N5">N5</SelectItem>
-                    <SelectItem value="N4">N4</SelectItem>
-                    <SelectItem value="N3">N3</SelectItem>
-                    <SelectItem value="N2">N2</SelectItem>
-                    <SelectItem value="N1">N1</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Kategori ID</Label><Input type="number" value={vocabForm.kategori_id} onChange={(e) => setVocabForm({ ...vocabForm, kategori_id: e.target.value })} /></div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowVocabDialog(false)}>Batal</Button>
-            <Button disabled={submitting} onClick={async () => {
-              setSubmitting(true)
-              try {
-                if (selectedVocab) await adminAPI.updateVocab(selectedVocab.id, vocabForm)
-                else await adminAPI.createVocab(vocabForm)
-                toast({ title: "Success", description: `Vocabulary ${selectedVocab ? "updated" : "created"} successfully` })
-                const vocabRes = await adminAPI.getVocab({ page: 1, per_page: 50 })
-                setVocab(vocabRes.data.data.vocab)
-                setShowVocabDialog(false)
-                setSelectedVocab(null)
-                setVocabForm({ kanji: "", hiragana: "", romaji: "", arti: "", contoh_kalimat: "", contoh_arti: "", jlpt_level: "N5", kategori_id: "" })
-              } catch (error) { toast({ title: "Error", description: "Failed to save vocabulary", variant: "destructive" }) }
-              finally { setSubmitting(false) }
-            }}>Simpan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Dialogs */}
+      <VocabDialog 
+        open={showVocabDialog}
+        onOpenChange={setShowVocabDialog}
+        selectedVocab={selectedVocab}
+        onSuccess={() => {
+          fetchData()
+          setSelectedVocab(null)
+        }}
+      />
 
-      {/* Category Dialog */}
-      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedCategory ? "Edit Kategori" : "Tambah Kategori Baru"}</DialogTitle>
-            <DialogDescription>Isi informasi kategori di bawah ini.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div><Label>Nama Kategori</Label><Input value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} /></div>
-            <div><Label>Slug</Label><Input value={categoryForm.slug} onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })} placeholder="auto-generated" /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCategoryDialog(false)}>Batal</Button>
-            <Button disabled={submitting} onClick={async () => {
-              setSubmitting(true)
-              try {
-                if (selectedCategory) await adminAPI.updateCategory(selectedCategory.id, categoryForm)
-                else await adminAPI.createCategory(categoryForm)
-                toast({ title: "Success", description: `Category ${selectedCategory ? "updated" : "created"} successfully` })
-                const categoriesRes = await adminAPI.getCategories()
-                setCategories(categoriesRes.data.data.categories)
-                setShowCategoryDialog(false)
-                setSelectedCategory(null)
-                setCategoryForm({ name: "", slug: "" })
-              } catch (error) { toast({ title: "Error", description: "Failed to save category", variant: "destructive" }) }
-              finally { setSubmitting(false) }
-            }}>Simpan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <GrammarDialog 
+        open={showGrammarDialog}
+        onOpenChange={setShowGrammarDialog}
+        selectedGrammar={selectedGrammar}
+        onSuccess={() => {
+          fetchData()
+          setSelectedGrammar(null)
+        }}
+      />
 
-      {/* Grammar Dialog */}
-      <Dialog open={showGrammarDialog} onOpenChange={setShowGrammarDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedGrammar ? "Edit Grammar" : "Tambah Grammar Baru"}</DialogTitle>
-            <DialogDescription>Isi informasi tata bahasa di bawah ini.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {/* Thumbnail Upload */}
-            <div>
-              <Label>Thumbnail / Cover Image</Label>
-              <div className="mt-2">
-                {thumbnailPreview ? (
-                  <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted mb-3">
-                    <img src={thumbnailPreview} alt="Thumbnail preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={removeThumbnail}
-                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div 
-                    className="w-full h-32 rounded-lg border-2 border-dashed border-border bg-muted/30 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50 transition-colors mb-3"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">Klik untuk upload thumbnail</p>
-                    <p className="text-xs text-muted-foreground">PNG, JPG, JPEG, WEBP. Maks 5MB</p>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleThumbnailSelect}
-                />
-              </div>
-            </div>
+      <ReadingDialog 
+        open={showReadingDialog}
+        onOpenChange={setShowReadingDialog}
+        selectedReading={selectedReading}
+        onSuccess={() => {
+          fetchData()
+          setSelectedReading(null)
+        }}
+      />
 
-            <div>
-              <Label>Thumbnail Alt Text</Label>
-              <Input 
-                value={grammarForm.thumbnail_alt} 
-                onChange={(e) => setGrammarForm({ ...grammarForm, thumbnail_alt: e.target.value })} 
-                placeholder="Deskripsi gambar untuk SEO"
-              />
-            </div>
-
-            <div>
-              <Label>Title *</Label>
-              <Input 
-                value={grammarForm.title} 
-                onChange={(e) => setGrammarForm({ ...grammarForm, title: e.target.value })} 
-                placeholder="Contoh: Tata Bahasa ~te imasu"
-              />
-            </div>
-
-            <div>
-              <Label>Pattern *</Label>
-              <Input 
-                value={grammarForm.pattern} 
-                onChange={(e) => setGrammarForm({ ...grammarForm, pattern: e.target.value })} 
-                placeholder="Contoh: 〜ています"
-              />
-            </div>
-
-            <div>
-              <Label>Meaning *</Label>
-              <Input 
-                value={grammarForm.meaning} 
-                onChange={(e) => setGrammarForm({ ...grammarForm, meaning: e.target.value })} 
-                placeholder="Contoh: Sedang melakukan sesuatu"
-              />
-            </div>
-
-            <div>
-              <Label>Explanation</Label>
-              <Textarea 
-                rows={4} 
-                value={grammarForm.explanation} 
-                onChange={(e) => setGrammarForm({ ...grammarForm, explanation: e.target.value })} 
-                placeholder="Penjelasan detail tentang pola kalimat ini..."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Level</Label>
-                <Select value={grammarForm.level} onValueChange={(v) => setGrammarForm({ ...grammarForm, level: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="N5">N5</SelectItem>
-                    <SelectItem value="N4">N4</SelectItem>
-                    <SelectItem value="N3">N3</SelectItem>
-                    <SelectItem value="N2">N2</SelectItem>
-                    <SelectItem value="N1">N1</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Category</Label>
-                <Input 
-                  value={grammarForm.category} 
-                  onChange={(e) => setGrammarForm({ ...grammarForm, category: e.target.value })} 
-                  placeholder="Contoh: Kata Kerja, Kata Sifat"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Notes / Catatan Tambahan</Label>
-              <Textarea 
-                rows={3} 
-                value={grammarForm.notes} 
-                onChange={(e) => setGrammarForm({ ...grammarForm, notes: e.target.value })} 
-                placeholder="Catatan penting tentang grammar ini..."
-              />
-            </div>
-
-            {/* Contoh Kalimat Section */}
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center mb-3">
-                <Label className="text-base font-semibold">Contoh Kalimat</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addExampleSentence}>
-                  <PlusCircle className="h-4 w-4 mr-1" />
-                  Tambah
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {exampleSentences.map((example, idx) => (
-                  <div key={idx} className="p-3 border rounded-lg bg-muted/20">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-sm font-medium">Contoh #{idx + 1}</span>
-                      {exampleSentences.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => removeExampleSentence(idx)}>
-                          <MinusCircle className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Input
-                        placeholder="Kalimat Jepang *"
-                        value={example.japanese}
-                        onChange={(e) => updateExampleSentence(idx, "japanese", e.target.value)}
-                      />
-                      <Input
-                        placeholder="Terjemahan Indonesia *"
-                        value={example.indonesian}
-                        onChange={(e) => updateExampleSentence(idx, "indonesian", e.target.value)}
-                      />
-                      <Input
-                        placeholder="Romaji (opsional)"
-                        value={example.romaji || ""}
-                        onChange={(e) => updateExampleSentence(idx, "romaji", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Percakapan Section */}
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center mb-3">
-                <Label className="text-base font-semibold">Percakapan</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addConversation}>
-                  <PlusCircle className="h-4 w-4 mr-1" />
-                  Tambah
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {conversations.map((conv, idx) => (
-                  <div key={idx} className="p-3 border rounded-lg bg-muted/20">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-sm font-medium">Percakapan #{idx + 1}</span>
-                      {conversations.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => removeConversation(idx)}>
-                          <MinusCircle className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Input
-                        placeholder="Speaker (A/B/C) *"
-                        value={conv.speaker}
-                        onChange={(e) => updateConversation(idx, "speaker", e.target.value)}
-                      />
-                      <Input
-                        placeholder="Kalimat Jepang *"
-                        value={conv.japanese}
-                        onChange={(e) => updateConversation(idx, "japanese", e.target.value)}
-                      />
-                      <Input
-                        placeholder="Terjemahan Indonesia *"
-                        value={conv.indonesian}
-                        onChange={(e) => updateConversation(idx, "indonesian", e.target.value)}
-                      />
-                      <Input
-                        placeholder="Romaji (opsional)"
-                        value={conv.romaji || ""}
-                        onChange={(e) => updateConversation(idx, "romaji", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label>Status</Label>
-              <Select value={String(grammarForm.is_published)} onValueChange={(v) => setGrammarForm({ ...grammarForm, is_published: parseInt(v) })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Draft</SelectItem>
-                  <SelectItem value="1">Published</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleGrammarDialogClose}>Batal</Button>
-            <Button onClick={handleSaveGrammar} disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {selectedGrammar ? "Update" : "Simpan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CategoryDialog 
+        open={showCategoryDialog}
+        onOpenChange={setShowCategoryDialog}
+        selectedCategory={selectedCategory}
+        onSuccess={() => {
+          fetchData()
+          setSelectedCategory(null)
+        }}
+      />
     </div>
   )
 }

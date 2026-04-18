@@ -8,14 +8,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { User, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react"
+import { User, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle, Send, AlertCircle, Loader2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/components/ui/use-toast"
+import { authAPI } from "@/lib/api"
+import { GoogleLoginButton } from "@/components/auth/google-login-button-v3"  // Ganti ke v3
 
 export default function RegisterPage() {
   const router = useRouter()
   const { register, isLoading, user } = useAuth()
   const { toast } = useToast()
+  
+  // State untuk form registrasi
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -26,6 +30,8 @@ export default function RegisterPage() {
   })
   const [error, setError] = useState("")
   const [mounted, setMounted] = useState(false)
+  
+  // State untuk password strength
   const [passwordStrength, setPasswordStrength] = useState({
     length: false,
     number: false,
@@ -34,6 +40,7 @@ export default function RegisterPage() {
 
   useEffect(() => setMounted(true), [])
 
+  // Redirect ke dashboard jika sudah login
   useEffect(() => {
     if (mounted && user) {
       router.push("/dashboard")
@@ -48,6 +55,7 @@ export default function RegisterPage() {
     })
   }
 
+  // Handle registrasi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -68,9 +76,28 @@ export default function RegisterPage() {
     }
 
     try {
+      // Registrasi user - backend TIDAK memberikan token langsung
       await register(formData.username, formData.email, formData.password)
+      
+      toast({
+        title: "Registrasi Berhasil!",
+        description: "Silakan cek email Anda untuk kode verifikasi 6 digit, lalu login.",
+      })
+      
+      // Redirect ke halaman verifikasi email
+      router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
+      
     } catch (err: any) {
-      setError(err.response?.data?.error || "Registrasi gagal. Silakan coba lagi.")
+      const errorMsg = err.response?.data?.error || "Registrasi gagal. Silakan coba lagi."
+      setError(errorMsg)
+      
+      if (err.response?.data?.error?.includes("already registered")) {
+        toast({
+          title: "Email Sudah Terdaftar",
+          description: "Silakan login atau gunakan email lain.",
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -122,9 +149,7 @@ export default function RegisterPage() {
                     exit={{ opacity: 0, x: -20, height: 0 }}
                     className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm flex items-start gap-2"
                   >
-                    <div className="w-4 h-4 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                    </div>
+                    <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                     <span>{error}</span>
                   </motion.div>
                 )}
@@ -280,6 +305,19 @@ export default function RegisterPage() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Divider */}
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Atau daftar dengan</span>
+                </div>
+              </div>
+
+              {/* Google Register Button - Ganti ke v3 */}
+              <GoogleLoginButton isRegister={true} />
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-4 pb-8">
@@ -290,11 +328,14 @@ export default function RegisterPage() {
               >
                 {isLoading ? (
                   <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Mendaftar...
                   </>
                 ) : (
-                  "Daftar Sekarang"
+                  <>
+                    Daftar Sekarang
+                    <Send className="ml-2 h-4 w-4" />
+                  </>
                 )}
               </Button>
 
