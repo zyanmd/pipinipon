@@ -1,103 +1,317 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useParams, useRouter } from "next/navigation"
+import Head from "next/head"
 import { readingAPI } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BookOpen, Eye, Search, Filter, ChevronLeft, ChevronRight, Newspaper, Clock, GraduationCap } from "lucide-react"
-import { motion } from "framer-motion"
-import { useToast } from "@/components/ui/use-toast"
+import { Progress } from "@/components/ui/progress"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  Bookmark,
+  BookmarkCheck,
+  Eye,
+  Calendar,
+  GraduationCap,
+  ArrowLeft,
+  CheckCircle,
+  Share2,
+  Check,
+  Link2,
+  X
+} from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 import { getReadingImageUrl } from "@/lib/image-helper"
 
-export default function ReadingListPage() {
+// Fungsi untuk parsing furigana (format: [text]{reading})
+function parseFurigana(text: string) {
+  if (!text) return text
+  
+  const furiganaRegex = /\[(.*?)\]{(.*?)}/g
+  const parts = []
+  let lastIndex = 0
+  let match
+  
+  while ((match = furiganaRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index))
+    }
+    parts.push(
+      <ruby key={match.index}>
+        {match[1]}
+        <rp>(</rp>
+        <rt>{match[2]}</rt>
+        <rp>)</rp>
+      </ruby>
+    )
+    lastIndex = match.index + match[0].length
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex))
+  }
+  
+  return parts
+}
+
+// Komponen Share Modal - Sederhana (copy link only)
+function ShareModal({ isOpen, onClose, url, title }: { isOpen: boolean; onClose: () => void; url: string; title: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Bagikan Artikel</h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Salin link artikel ini untuk dibagikan ke teman-temanmu
+        </p>
+
+        <div className="relative">
+          <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+            <input
+              type="text"
+              value={url}
+              readOnly
+              className="flex-1 bg-transparent text-sm text-gray-600 dark:text-gray-400 px-2 outline-none"
+            />
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-medium hover:from-emerald-600 hover:to-emerald-700 transition-all"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span>Tersalin!</span>
+                </>
+              ) : (
+                <>
+                  <Link2 className="h-4 w-4" />
+                  <span>Salin Link</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 dark:text-gray-500 text-center mt-4">
+          Bagikan ke WhatsApp, Telegram, atau media sosial lainnya
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default function ReadingDetailPage() {
+  const params = useParams()
+  const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
-  const router = useRouter()
+  const contentRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [hasReached100, setHasReached100] = useState(false)
   
-  const [readings, setReadings] = useState<any[]>([])
+  const [reading, setReading] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    per_page: 12,
-    pages: 0,
-    has_prev: false,
-    has_next: false
-  })
-  
-  // Filters
-  const [level, setLevel] = useState<string>("")
-  const [category, setCategory] = useState<string>("")
-  const [search, setSearch] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [isBookmarked, setIsBookmarked] = useState(false)
+  const [progress, setProgress] = useState({ last_position: 0, progress_percent: 0, completed: false })
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
+
+  const slug = params.slug as string
+  const [shareUrl, setShareUrl] = useState('')
 
   useEffect(() => {
     setMounted(true)
+    if (typeof window !== 'undefined') {
+      setShareUrl(window.location.href)
+    }
   }, [])
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [search])
-
-  const fetchReadings = async () => {
+  const fetchReading = async () => {
     setLoading(true)
     try {
-      const response = await readingAPI.getAll({
-        page: pagination.page,
-        per_page: pagination.per_page,
-        level: level || undefined,
-        category: category || undefined,
-        search: debouncedSearch || undefined,
-        published_only: true
-      })
-      
+      const response = await readingAPI.getBySlug(slug)
       if (response.data.success) {
-        setReadings(response.data.data.readings)
-        setPagination(prev => ({
-          ...prev,
-          total: response.data.data.pagination.total,
-          pages: response.data.data.pagination.pages,
-          has_prev: response.data.data.pagination.has_prev,
-          has_next: response.data.data.pagination.has_next
-        }))
+        const data = response.data.data
+        setReading(data)
+        setIsBookmarked(data.is_bookmarked || false)
+        if (data.progress) {
+          const isCompleted = data.progress.completed || false
+          setProgress({
+            last_position: data.progress.last_position || 0,
+            progress_percent: data.progress.progress_percent || 0,
+            completed: isCompleted
+          })
+          setHasReached100(isCompleted)
+        }
       }
     } catch (error) {
-      console.error("Error fetching readings:", error)
+      console.error("Error fetching reading:", error)
       toast({
         title: "Error",
         description: "Gagal memuat artikel. Silakan coba lagi.",
         variant: "destructive",
       })
+      router.push("/reading")
     } finally {
       setLoading(false)
+      setInitialLoadDone(true)
     }
   }
 
   useEffect(() => {
-    fetchReadings()
-  }, [pagination.page, level, category, debouncedSearch])
+    if (slug) {
+      fetchReading()
+    }
+  }, [slug])
 
-  const handlePageChange = (newPage: number) => {
-    setPagination(prev => ({ ...prev, page: newPage }))
-    window.scrollTo({ top: 0, behavior: "smooth" })
+  // Fungsi untuk menghitung progress berdasarkan scroll
+  const calculateScrollProgress = useCallback(() => {
+    const windowHeight = window.innerHeight
+    const documentHeight = document.documentElement.scrollHeight
+    const scrollTop = window.scrollY
+    
+    const maxScroll = documentHeight - windowHeight
+    let percent = 0
+    
+    if (maxScroll > 0) {
+      percent = (scrollTop / maxScroll) * 100
+      percent = Math.min(Math.max(percent, 0), 100)
+    }
+    
+    return {
+      percent: Math.floor(percent),
+      scrollTop: Math.floor(scrollTop)
+    }
+  }, [])
+
+  // Fungsi untuk menyimpan progress ke backend
+  const saveProgress = useCallback(async (percent: number, scrollTop: number, isCompleted: boolean) => {
+    if (!reading || !user) return
+    
+    try {
+      await readingAPI.updateProgress(reading.id, {
+        last_position: scrollTop,
+        completed: isCompleted
+      })
+      console.log(`Progress saved: ${percent}%, completed: ${isCompleted}`)
+    } catch (error) {
+      console.error("Failed to save progress:", error)
+    }
+  }, [reading, user])
+
+  // Handle scroll event dengan debounce - TANPA AUTO SCROLL
+  useEffect(() => {
+    if (!reading || !user || !mounted || !initialLoadDone) return
+
+    const handleScroll = () => {
+      const { percent, scrollTop } = calculateScrollProgress()
+      
+      let finalPercent = percent
+      let isCompleted = progress.completed || hasReached100 || percent >= 95
+      
+      if (hasReached100) {
+        finalPercent = 100
+        isCompleted = true
+      } else if (percent >= 95) {
+        finalPercent = 100
+        isCompleted = true
+        setHasReached100(true)
+      } else {
+        finalPercent = Math.max(percent, progress.progress_percent)
+        isCompleted = false
+      }
+      
+      if (finalPercent !== progress.progress_percent || isCompleted !== progress.completed) {
+        setProgress(prev => ({
+          ...prev,
+          progress_percent: finalPercent,
+          last_position: scrollTop,
+          completed: isCompleted
+        }))
+      }
+      
+      if (saveTimeout) {
+        clearTimeout(saveTimeout)
+      }
+      
+      const timeout = setTimeout(() => {
+        saveProgress(finalPercent, scrollTop, isCompleted)
+      }, 2000)
+      
+      setSaveTimeout(timeout)
+    }
+
+    window.addEventListener("scroll", handleScroll)
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      if (saveTimeout) {
+        clearTimeout(saveTimeout)
+      }
+    }
+  }, [reading, user, mounted, initialLoadDone, calculateScrollProgress, saveProgress, saveTimeout, progress.progress_percent, progress.completed, hasReached100])
+
+  const handleBookmark = async () => {
+    if (!user) {
+      toast({
+        title: "Login Diperlukan",
+        description: "Silakan login untuk menyimpan bookmark.",
+        variant: "destructive",
+      })
+      router.push("/login")
+      return
+    }
+
+    try {
+      if (isBookmarked) {
+        const bookmarksRes = await readingAPI.getBookmarks()
+        const bookmark = bookmarksRes.data.data.find((b: any) => b.reading_id === reading.id)
+        if (bookmark) {
+          await readingAPI.removeBookmark(bookmark.id)
+        }
+        setIsBookmarked(false)
+        toast({ title: "Bookmark dihapus", description: "Artikel dihapus dari bookmark" })
+      } else {
+        await readingAPI.addBookmark(reading.id)
+        setIsBookmarked(true)
+        toast({ title: "Bookmark ditambahkan", description: "Artikel disimpan ke bookmark" })
+      }
+    } catch (error) {
+      console.error("Error toggling bookmark:", error)
+      toast({
+        title: "Error",
+        description: "Gagal menyimpan bookmark. Silakan coba lagi.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleShare = () => {
+    setShowShareModal(true)
   }
 
   const getLevelColor = (level: string) => {
@@ -111,232 +325,246 @@ export default function ReadingListPage() {
     }
   }
 
-  const getCategoryIcon = (cat: string) => {
-    switch (cat) {
-      case "artikel": return <Newspaper className="h-3 w-3" />
-      case "cerita": return <BookOpen className="h-3 w-3" />
-      default: return <Newspaper className="h-3 w-3" />
+  // JSON-LD Schema untuk SEO
+  const jsonLdSchema = reading ? {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": reading.title,
+    "description": reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, ''),
+    "image": getReadingImageUrl(reading.thumbnail),
+    "datePublished": reading.published_at || reading.created_at,
+    "dateModified": reading.updated_at || reading.published_at || reading.created_at,
+    "author": {
+      "@type": "Person",
+      "name": reading.author_name || "Pipinipon",
+      "url": "https://pipinipon.site"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Pipinipon",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://pipinipon.site/logo.png"
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": shareUrl
+    },
+    "keywords": `belajar bahasa jepang, ${reading.level}, membaca bahasa jepang, furigana, ${reading.category}`,
+    "educationalLevel": reading.level,
+    "inLanguage": "id",
+    "about": {
+      "@type": "Thing",
+      "name": "Bahasa Jepang"
     }
+  } : null
+
+  if (!mounted || loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <Skeleton className="h-8 w-32 mb-4" />
+        <Skeleton className="h-12 w-3/4 mb-4" />
+        <div className="flex gap-4 mb-8">
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="h-6 w-20" />
+        </div>
+        <Skeleton className="h-96 w-full" />
+      </div>
+    )
   }
 
-  if (!mounted) return null
+  if (!reading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8 text-center">
+        <h1 className="text-2xl font-bold mb-4">Artikel Tidak Ditemukan</h1>
+        <Button onClick={() => router.push("/reading")}>Kembali ke Daftar Artikel</Button>
+      </div>
+    )
+  }
+
+  const imageUrl = getReadingImageUrl(reading.thumbnail)
+  const isCompleted = progress.completed || hasReached100
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-      {/* Hero Section */}
-      <div className="relative bg-gradient-to-r from-japanese-600 to-japanese-800 text-white py-16">
-        <div className="absolute inset-0 bg-black/20" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Artikel Bacaan Bahasa Jepang
-          </h1>
-          <p className="text-lg md:text-xl text-white/90 max-w-2xl mx-auto">
-            Tingkatkan kemampuan membaca Anda dengan artikel ber-furigana dari berbagai level JLPT
-          </p>
-        </div>
-      </div>
+    <>
+      <Head>
+        <title>{reading.title} | Pipinipon - Belajar Bahasa Jepang</title>
+        <meta name="description" content={reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, '')} />
+        <meta name="keywords" content={`belajar bahasa jepang, ${reading.level}, membaca bahasa jepang, furigana, ${reading.category}`} />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content={shareUrl} />
+        <meta property="og:title" content={reading.title} />
+        <meta property="og:description" content={reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, '')} />
+        <meta property="og:image" content={imageUrl || "https://pipinipon.site/og-image.jpg"} />
+        <meta property="article:published_time" content={reading.published_at || reading.created_at} />
+        <meta property="article:author" content={reading.author_name || "Pipinipon"} />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content={shareUrl} />
+        <meta name="twitter:title" content={reading.title} />
+        <meta name="twitter:description" content={reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, '')} />
+        <meta name="twitter:image" content={imageUrl || "https://pipinipon.site/og-image.jpg"} />
+      </Head>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters */}
-        <div className="mb-8 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Cari artikel..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
+      {/* JSON-LD Schema */}
+      {jsonLdSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSchema) }}
+        />
+      )}
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        url={shareUrl}
+        title={reading.title}
+      />
+
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+        {/* Progress Bar - sticky top */}
+        <div className="sticky top-0 left-0 right-0 z-50">
+          <Progress value={progress.progress_percent} className="h-1 rounded-none" />
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Back Button */}
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/reading")}
+            className="mb-6 -ml-3"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Kembali
+          </Button>
+
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex flex-wrap gap-3 mb-4">
+              <Badge className={getLevelColor(reading.level)}>
+                <GraduationCap className="h-3 w-3 mr-1" />
+                {reading.level}
+              </Badge>
+              <Badge variant="secondary" className="capitalize">
+                {reading.category}
+              </Badge>
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Eye className="h-4 w-4" />
+                <span>{reading.views} dilihat</span>
+              </div>
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>
+                  {new Date(reading.published_at || reading.created_at).toLocaleDateString('id-ID', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </span>
               </div>
             </div>
-            <div className="flex gap-3">
-              <Select value={level} onValueChange={setLevel}>
-                <SelectTrigger className="w-[130px]">
-                  <GraduationCap className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Semua Level</SelectItem>
-                  <SelectItem value="N5">N5 (Pemula)</SelectItem>
-                  <SelectItem value="N4">N4 (Dasar)</SelectItem>
-                  <SelectItem value="N3">N3 (Menengah)</SelectItem>
-                  <SelectItem value="N2">N2 (Mahir)</SelectItem>
-                  <SelectItem value="N1">N1 (Lanjut)</SelectItem>
-                </SelectContent>
-              </Select>
 
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="w-[130px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Semua</SelectItem>
-                  <SelectItem value="artikel">Artikel</SelectItem>
-                  <SelectItem value="cerita">Cerita</SelectItem>
-                  <SelectItem value="berita">Berita</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <h1 className="text-3xl md:text-4xl font-bold mb-4">{reading.title}</h1>
+            
+            {reading.author_name && (
+              <p className="text-muted-foreground">
+                Oleh: {reading.author_name}
+              </p>
+            )}
           </div>
-        </div>
 
-        {/* Results Count */}
-        <div className="mb-6 flex justify-between items-center">
-          <p className="text-sm text-muted-foreground">
-            Menampilkan {readings.length} dari {pagination.total} artikel
-          </p>
-        </div>
+          {/* Thumbnail */}
+          {imageUrl && (
+            <div className="relative h-64 md:h-96 w-full mb-8 rounded-lg overflow-hidden bg-muted">
+              <img
+                src={imageUrl}
+                alt={reading.thumbnail_alt || reading.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.style.display = 'none'
+                }}
+              />
+            </div>
+          )}
 
-        {/* Reading Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="overflow-hidden">
-                <Skeleton className="h-48 w-full" />
-                <CardHeader>
-                  <Skeleton className="h-6 w-3/4 mb-2" />
-                  <Skeleton className="h-4 w-1/2" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-16 w-full" />
-                </CardContent>
-                <CardFooter>
-                  <Skeleton className="h-10 w-full" />
-                </CardFooter>
-              </Card>
+          {/* Action Buttons */}
+          <div className="flex gap-3 mb-8">
+            <Button
+              variant={isBookmarked ? "japanese" : "outline"}
+              onClick={handleBookmark}
+            >
+              {isBookmarked ? (
+                <BookmarkCheck className="h-4 w-4 mr-2" />
+              ) : (
+                <Bookmark className="h-4 w-4 mr-2" />
+              )}
+              {isBookmarked ? "Tersimpan" : "Simpan"}
+            </Button>
+            
+            <Button variant="outline" onClick={handleShare}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Bagikan
+            </Button>
+          </div>
+
+          {/* Reading Progress Indicator Card */}
+          <div className="mb-6 p-4 bg-muted/30 rounded-lg">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="font-medium">Progress Membaca</span>
+              <span className="font-bold text-japanese-600">{progress.progress_percent}%</span>
+            </div>
+            <Progress value={progress.progress_percent} className="h-2" />
+            <div className="flex justify-between text-xs text-muted-foreground mt-2">
+              <span>Mulai</span>
+              <span>Scroll ke bawah →</span>
+              <span>Selesai</span>
+            </div>
+            {isCompleted && (
+              <p className="text-sm text-green-600 mt-3 flex items-center gap-1">
+                <CheckCircle className="h-4 w-4" />
+                ✅ Selamat! Anda telah menyelesaikan artikel ini.
+              </p>
+            )}
+            {!isCompleted && progress.progress_percent > 0 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Lanjutkan membaca untuk meningkatkan progress Anda
+              </p>
+            )}
+            {!isCompleted && progress.progress_percent === 0 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Mulai scroll ke bawah untuk mencatat progress membaca Anda
+              </p>
+            )}
+          </div>
+
+          {/* Content with Furigana */}
+          <div 
+            ref={contentRef}
+            className="prose prose-lg dark:prose-invert max-w-none"
+          >
+            {reading.content?.split('\n').map((paragraph: string, idx: number) => (
+              <p key={idx} className="mb-4 leading-relaxed">
+                {parseFurigana(paragraph)}
+              </p>
             ))}
           </div>
-        ) : readings.length === 0 ? (
-          <div className="text-center py-16">
-            <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Belum Ada Artikel</h3>
-            <p className="text-muted-foreground">
-              Belum ada artikel yang tersedia. Silakan cek kembali nanti.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {readings.map((reading, index) => {
-              const imageUrl = getReadingImageUrl(reading.thumbnail)
-              return (
-                <motion.div
-                  key={reading.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Link href={`/reading/${reading.slug}`}>
-                    <Card className="h-full cursor-pointer hover:shadow-xl transition-all duration-300 overflow-hidden group">
-                      <div className="relative h-48 overflow-hidden bg-muted">
-                        {imageUrl ? (
-                          <img
-                            src={imageUrl}
-                            alt={reading.thumbnail_alt || reading.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-japanese-100 to-japanese-200 dark:from-japanese-900/50 dark:to-japanese-800/50 flex items-center justify-center">
-                            <BookOpen className="w-12 h-12 text-japanese-400" />
-                          </div>
-                        )}
-                        <div className="absolute top-3 left-3 flex gap-2">
-                          <Badge className={getLevelColor(reading.level)}>
-                            {reading.level}
-                          </Badge>
-                          <Badge variant="secondary" className="gap-1">
-                            {getCategoryIcon(reading.category)}
-                            <span className="capitalize">{reading.category}</span>
-                          </Badge>
-                        </div>
-                        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                          <Eye className="h-3 w-3" />
-                          <span>{reading.views || 0}</span>
-                        </div>
-                      </div>
-                      
-                      <CardHeader>
-                        <CardTitle className="line-clamp-2 text-xl group-hover:text-japanese-600 transition-colors">
-                          {reading.title}
-                        </CardTitle>
-                        <CardDescription className="flex items-center gap-2 text-xs">
-                          <Clock className="h-3 w-3" />
-                          {new Date(reading.published_at || reading.created_at).toLocaleDateString('id-ID', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </CardDescription>
-                      </CardHeader>
-                      
-                      <CardContent>
-                        <p className="text-muted-foreground line-clamp-3 text-sm">
-                          {reading.excerpt || reading.content?.replace(/<[^>]*>/g, '').substring(0, 150) + '...'}
-                        </p>
-                      </CardContent>
-                      
-                      <CardFooter>
-                        <Button variant="ghost" className="w-full group-hover:bg-japanese-50 dark:group-hover:bg-japanese-950/20">
-                          Baca Selengkapnya →
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  </Link>
-                </motion.div>
-              )
-            })}
-          </div>
-        )}
 
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="flex justify-center gap-2 mt-8">
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(pagination.page - 1)}
-              disabled={!pagination.has_prev}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Sebelumnya
-            </Button>
-            <div className="flex gap-1">
-              {[...Array(Math.min(pagination.pages, 5))].map((_, i) => {
-                let pageNum = pagination.page
-                if (pagination.pages <= 5) {
-                  pageNum = i + 1
-                } else if (pagination.page <= 3) {
-                  pageNum = i + 1
-                } else if (pagination.page >= pagination.pages - 2) {
-                  pageNum = pagination.pages - 4 + i
-                } else {
-                  pageNum = pagination.page - 2 + i
-                }
-                
-                return (
-                  <Button
-                    key={pageNum}
-                    variant={pagination.page === pageNum ? "japanese" : "outline"}
-                    onClick={() => handlePageChange(pageNum)}
-                    className="w-10"
-                  >
-                    {pageNum}
-                  </Button>
-                )
-              })}
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => handlePageChange(pagination.page + 1)}
-              disabled={!pagination.has_next}
-            >
-              Selanjutnya
-              <ChevronRight className="h-4 w-4" />
+          {/* Footer Navigation */}
+          <div className="mt-12 pt-8 border-t">
+            <Button onClick={() => router.push("/reading")} variant="outline" className="w-full">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Kembali ke Daftar Artikel
             </Button>
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

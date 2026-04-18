@@ -13,21 +13,17 @@ import { formatRelativeTime } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import { VerifyEmailBanner } from "@/components/verify-email-banner"
-import Image from "next/image"
+import { useTheme } from "@/components/providers/theme-provider"
 
 // Helper function untuk mendapatkan URL gambar yang valid
 function getValidImageUrl(url: string | null | undefined): string | null {
   if (!url) return null
-  // Jika URL sudah absolute (http:// atau https://)
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url
   }
-  // Jika URL dimulai dengan slash, gunakan sebagai relative path
   if (url.startsWith('/')) {
     return url
   }
-  // Jika URL tidak dimulai dengan slash, tambahkan slash di depan
-  // Contoh: "storage/readings/xxx.png" -> "/storage/readings/xxx.png"
   return `/${url}`
 }
 
@@ -70,18 +66,18 @@ function AnimatedNumber({ value, duration = 1000, delay = 0 }: { value: number; 
   return <span ref={ref}>{count.toLocaleString()}</span>
 }
 
-// Komponen Reading Card dengan gaya iPhone dan animasi motion
-function ReadingCard({ reading, index, onPress }: { reading: any; index: number; onPress?: () => void }) {
+// Komponen Reading Card dengan tema
+function ReadingCard({ reading, index, onPress, isDark }: { reading: any; index: number; onPress?: () => void; isDark: boolean }) {
   const [isPressed, setIsPressed] = useState(false)
   const [imgError, setImgError] = useState(false)
   
   const getLevelColor = (level: string) => {
     switch(level) {
-      case 'N5': return 'from-green-400 to-emerald-500'
-      case 'N4': return 'from-blue-400 to-cyan-500'
-      case 'N3': return 'from-yellow-400 to-orange-500'
-      case 'N2': return 'from-orange-400 to-red-500'
-      case 'N1': return 'from-red-400 to-rose-500'
+      case 'N5': return 'from-emerald-400 to-emerald-500'
+      case 'N4': return 'from-sky-400 to-sky-500'
+      case 'N3': return 'from-amber-400 to-amber-500'
+      case 'N2': return 'from-orange-400 to-orange-500'
+      case 'N1': return 'from-rose-400 to-rose-500'
       default: return 'from-gray-400 to-gray-500'
     }
   }
@@ -89,9 +85,9 @@ function ReadingCard({ reading, index, onPress }: { reading: any; index: number;
   const getLevelBg = (level: string) => {
     switch(level) {
       case 'N5': return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-      case 'N4': return 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300'
-      case 'N3': return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-      case 'N2': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+      case 'N4': return 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
+      case 'N3': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+      case 'N2': return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
       case 'N1': return 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
       default: return 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
     }
@@ -116,17 +112,19 @@ function ReadingCard({ reading, index, onPress }: { reading: any; index: number;
       className="cursor-pointer"
     >
       <div className="group relative">
-        {/* Shadow effect */}
         <motion.div 
-          className="absolute -inset-0.5 bg-gradient-to-r from-japanese-500/20 to-japanese-600/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+          className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
           animate={{ opacity: isPressed ? 0.1 : 0 }}
         />
         
-        {/* Card iPhone style */}
-        <div className="relative bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-800">
+        <div className={`relative rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border ${
+          isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
+        }`}>
           <div className="flex flex-row">
-            {/* Thumbnail Image - Kotak */}
-            <div className="relative w-28 h-28 md:w-32 md:h-32 flex-shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
+            {/* Thumbnail Image */}
+            <div className={`relative w-28 h-28 md:w-32 md:h-32 flex-shrink-0 overflow-hidden ${
+              isDark ? 'bg-gray-800' : 'bg-gray-100'
+            }`}>
               <div className={`absolute inset-0 bg-gradient-to-br ${getLevelColor(reading.level)} opacity-10`} />
               {showImage ? (
                 <img
@@ -136,11 +134,10 @@ function ReadingCard({ reading, index, onPress }: { reading: any; index: number;
                   onError={() => setImgError(true)}
                 />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-japanese-400 to-japanese-600 flex items-center justify-center">
+                <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
                   <Newspaper className="w-10 h-10 text-white/50" />
                 </div>
               )}
-              {/* Level badge overlay on thumbnail */}
               <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-semibold ${getLevelBg(reading.level)} backdrop-blur-sm z-10`}>
                 {reading.level}
               </div>
@@ -148,13 +145,15 @@ function ReadingCard({ reading, index, onPress }: { reading: any; index: number;
             
             {/* Content */}
             <div className="flex-1 p-3 md:p-4">
-              <h3 className="font-semibold text-sm md:text-base line-clamp-2 text-gray-900 dark:text-white group-hover:text-japanese-600 dark:group-hover:text-japanese-400 transition-colors">
+              <h3 className={`font-semibold text-sm md:text-base line-clamp-2 transition-colors ${
+                isDark ? 'text-white group-hover:text-emerald-400' : 'text-gray-900 group-hover:text-emerald-600'
+              }`}>
                 {reading.title}
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+              <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                 {reading.description || "Tingkatkan kemampuan membaca Anda dengan artikel ber-furigana"}
               </p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-400 dark:text-gray-500">
+              <div className={`flex items-center gap-3 mt-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                 <span className="flex items-center gap-1">
                   <Eye className="w-3 h-3" />
                   <AnimatedNumber value={reading.views || 0} duration={500} />
@@ -172,13 +171,14 @@ function ReadingCard({ reading, index, onPress }: { reading: any; index: number;
             
             {/* Arrow indicator */}
             <div className="flex items-center pr-3 md:pr-4">
-              <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-japanese-500 transition-colors" />
+              <ChevronRight className={`w-4 h-4 transition-colors ${
+                isDark ? 'text-gray-600 group-hover:text-emerald-400' : 'text-gray-400 group-hover:text-emerald-500'
+              }`} />
             </div>
           </div>
           
-          {/* Progress bar for completed readings */}
           {reading.completed && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-japanese-500 to-japanese-600" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-emerald-600" />
           )}
         </div>
       </div>
@@ -188,6 +188,7 @@ function ReadingCard({ reading, index, onPress }: { reading: any; index: number;
 
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useAuth()
+  const { theme } = useTheme()
   const { toast } = useToast()
   const [masteredCount, setMasteredCount] = useState(0)
   const [totalStudied, setTotalStudied] = useState(0)
@@ -200,8 +201,14 @@ export default function DashboardPage() {
   const [fetchError, setFetchError] = useState(false)
   const [recentReadings, setRecentReadings] = useState<any[]>([])
   const [readingStats, setReadingStats] = useState<any>({ total_readings: 0, completed_readings: 0, completion_rate: 0 })
+  const [mounted, setMounted] = useState(false)
 
-  // Hitung level berdasarkan XP
+  const isDark = theme === "dark"
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const calculateLevel = (xp: number) => {
     const level = Math.floor(xp / 100) + 1
     return Math.min(level, 100)
@@ -410,10 +417,9 @@ export default function DashboardPage() {
     return { mastered: 0, total: 0, percentage: 0 }
   }
 
-  // Loading state
-  if (authLoading || loading) {
+  if (!mounted || authLoading || loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${isDark ? 'bg-gray-950' : 'bg-gray-50'}`}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="lg:col-span-2">
             <Skeleton className="h-32 w-full" />
@@ -450,7 +456,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900">
+    <div className={`min-h-screen ${isDark ? 'bg-gray-950' : 'bg-gray-50'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         {/* BANNER VERIFIKASI EMAIL */}
         {user.is_verified !== 1 && (
@@ -465,7 +471,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Welcome Section with XP Card - iPhone style */}
+        {/* Welcome Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -473,11 +479,11 @@ export default function DashboardPage() {
             className="lg:col-span-2"
           >
             <div className="relative">
-              <div className="absolute -top-4 -left-4 w-32 h-32 bg-japanese-500/10 rounded-full blur-3xl" />
-              <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 bg-clip-text text-transparent mb-2">
+              <div className="absolute -top-4 -left-4 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
+              <h1 className={`text-3xl md:text-4xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 Selamat Datang, {user?.username}!
               </h1>
-              <p className="text-gray-500 dark:text-gray-400">
+              <p className={`${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                 Lanjutkan perjalanan belajarmu di sini
               </p>
               {user.is_verified !== 1 && (
@@ -514,7 +520,9 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">Level</p>
-                    <p className="text-2xl font-bold gradient-text">{levelInfo.currentLevel}</p>
+                    <p className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
+                      {levelInfo.currentLevel}
+                    </p>
                   </div>
                 </div>
                 
@@ -559,9 +567,11 @@ export default function DashboardPage() {
               transition={{ delay: index * 0.1 }}
             >
               <Link href={stat.link}>
-                <Card className="cursor-pointer hover:shadow-lg transition-all duration-300 rounded-2xl border-0 bg-white dark:bg-gray-900 shadow-md">
+                <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 rounded-2xl border-0 shadow-md ${
+                  isDark ? 'bg-gray-900' : 'bg-white'
+                }`}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <CardTitle className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       {stat.title}
                     </CardTitle>
                     <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${stat.color} flex items-center justify-center shadow-sm`}>
@@ -569,7 +579,7 @@ export default function DashboardPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       {stat.title === "Streak" ? (
                         <AnimatedNumber value={currentStreak} duration={800} delay={index * 100} /> 
                       ) : stat.title === "XP Terkumpul" ? (
@@ -579,7 +589,7 @@ export default function DashboardPage() {
                       )}
                       {stat.title === "Streak" && " hari"}
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{stat.description}</p>
+                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{stat.description}</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -611,11 +621,11 @@ export default function DashboardPage() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card className="rounded-2xl border-0 shadow-md bg-white dark:bg-gray-900 h-full">
+            <Card className={`rounded-2xl border-0 shadow-md h-full ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-japanese-500" />
-                  <CardTitle className="text-gray-900 dark:text-white">Rekomendasi Belajar</CardTitle>
+                  <Sparkles className="h-5 w-5 text-emerald-500" />
+                  <CardTitle className={isDark ? 'text-white' : 'text-gray-900'}>Rekomendasi Belajar</CardTitle>
                 </div>
                 <CardDescription>
                   Mulai belajar dengan materi yang sesuai untukmu
@@ -623,25 +633,33 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Link href="/vocabulary?jlpt_level=N5">
-                  <Button variant="outline" className="w-full justify-start rounded-xl hover:bg-japanese-50 dark:hover:bg-japanese-950/20 transition-all duration-300">
+                  <Button variant="outline" className={`w-full justify-start rounded-xl transition-all duration-300 ${
+                    isDark ? 'hover:bg-emerald-950/20 border-gray-700' : 'hover:bg-emerald-50'
+                  }`}>
                     <BookOpen className="mr-2 h-4 w-4" />
                     Pelajari Kosakata N5
                   </Button>
                 </Link>
                 <Link href="/grammar?level=N5">
-                  <Button variant="outline" className="w-full justify-start rounded-xl hover:bg-japanese-50 dark:hover:bg-japanese-950/20 transition-all duration-300">
+                  <Button variant="outline" className={`w-full justify-start rounded-xl transition-all duration-300 ${
+                    isDark ? 'hover:bg-emerald-950/20 border-gray-700' : 'hover:bg-emerald-50'
+                  }`}>
                     <GraduationCap className="mr-2 h-4 w-4" />
                     Pelajari Tata Bahasa N5
                   </Button>
                 </Link>
                 <Link href="/reading">
-                  <Button variant="outline" className="w-full justify-start rounded-xl hover:bg-japanese-50 dark:hover:bg-japanese-950/20 transition-all duration-300">
+                  <Button variant="outline" className={`w-full justify-start rounded-xl transition-all duration-300 ${
+                    isDark ? 'hover:bg-emerald-950/20 border-gray-700' : 'hover:bg-emerald-50'
+                  }`}>
                     <Newspaper className="mr-2 h-4 w-4" />
                     Baca Artikel Bahasa Jepang
                   </Button>
                 </Link>
                 <Link href="/study">
-                  <Button variant="outline" className="w-full justify-start rounded-xl hover:bg-japanese-50 dark:hover:bg-japanese-950/20 transition-all duration-300">
+                  <Button variant="outline" className={`w-full justify-start rounded-xl transition-all duration-300 ${
+                    isDark ? 'hover:bg-emerald-950/20 border-gray-700' : 'hover:bg-emerald-50'
+                  }`}>
                     <Target className="mr-2 h-4 w-4" />
                     Latihan Soal
                   </Button>
@@ -655,11 +673,11 @@ export default function DashboardPage() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <Card className="rounded-2xl border-0 shadow-md bg-white dark:bg-gray-900 h-full">
+            <Card className={`rounded-2xl border-0 shadow-md h-full ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-japanese-500" />
-                  <CardTitle className="text-gray-900 dark:text-white">Aktivitas Terbaru</CardTitle>
+                  <Clock className="h-5 w-5 text-emerald-500" />
+                  <CardTitle className={isDark ? 'text-white' : 'text-gray-900'}>Aktivitas Terbaru</CardTitle>
                 </div>
                 <CardDescription>
                   Lihat perkembangan belajarmu di sini
@@ -674,14 +692,20 @@ export default function DashboardPage() {
                         href={`/vocabulary/${activity.vocab_id}`}
                       >
                         <motion.div 
-                          className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300"
+                          className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 ${
+                            isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'
+                          }`}
                           whileHover={{ x: 4 }}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`w-2 h-2 rounded-full ${activity.mastered === 1 ? 'bg-green-500' : 'bg-yellow-500'}`} />
                             <div>
-                              <p className="font-medium text-gray-900 dark:text-white">{activity.vocab?.kanji || 'Loading...'}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{activity.vocab?.arti || ''}</p>
+                              <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {activity.vocab?.kanji || 'Loading...'}
+                              </p>
+                              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {activity.vocab?.arti || ''}
+                              </p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -693,7 +717,7 @@ export default function DashboardPage() {
                                 <AnimatedNumber value={activity.wrong_count || 0} duration={500} /> salah
                               </span>
                             </div>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                               {formatRelativeTime(activity.last_studied)}
                             </p>
                           </div>
@@ -707,7 +731,7 @@ export default function DashboardPage() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                     <Trophy className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>Belum ada riwayat belajar</p>
                     <p className="text-sm mt-1">Mulai belajar sekarang untuk melihat progressmu!</p>
@@ -723,24 +747,24 @@ export default function DashboardPage() {
           </motion.div>
         </div>
 
-        {/* Japanese Reading Section - iPhone style with motion cards */}
+        {/* Japanese Reading Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55 }}
           className="mb-6"
         >
-          <Card className="rounded-2xl border-0 shadow-md bg-white dark:bg-gray-900 overflow-hidden">
+          <Card className={`rounded-2xl border-0 shadow-md overflow-hidden ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-japanese-500 to-japanese-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 flex items-center justify-center">
                     <Newspaper className="h-4 w-4 text-white" />
                   </div>
-                  <CardTitle className="text-gray-900 dark:text-white">Artikel Bacaan</CardTitle>
+                  <CardTitle className={isDark ? 'text-white' : 'text-gray-900'}>Artikel Bacaan</CardTitle>
                 </div>
                 <Link href="/reading">
-                  <Button variant="ghost" size="sm" className="text-japanese-600 rounded-xl">
+                  <Button variant="ghost" size="sm" className="text-emerald-600 rounded-xl">
                     Lihat semua →
                   </Button>
                 </Link>
@@ -757,19 +781,21 @@ export default function DashboardPage() {
                       key={reading.id} 
                       reading={reading} 
                       index={idx}
+                      isDark={isDark}
                       onPress={() => window.location.href = `/reading/${reading.id}`}
                     />
                   ))}
                   
-                  {/* Reading Stats */}
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <div className={`mt-4 pt-4 border-t flex justify-between text-sm ${
+                    isDark ? 'border-gray-800 text-gray-400' : 'border-gray-100 text-gray-500'
+                  }`}>
                     <span>Total dibaca: <AnimatedNumber value={readingStats.total_readings} duration={800} /></span>
                     <span>Selesai: <AnimatedNumber value={readingStats.completed_readings} duration={800} /></span>
                     <span>Progress: <AnimatedNumber value={readingStats.completion_rate} duration={800} />%</span>
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   <Newspaper className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>Belum ada artikel yang dibaca</p>
                   <Link href="/reading">
@@ -790,9 +816,9 @@ export default function DashboardPage() {
           transition={{ delay: 0.6 }}
           className="mt-6"
         >
-          <Card className="rounded-2xl border-0 shadow-md bg-white dark:bg-gray-900">
+          <Card className={`rounded-2xl border-0 shadow-md ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
             <CardHeader>
-              <CardTitle className="text-gray-900 dark:text-white">Progress Level JLPT</CardTitle>
+              <CardTitle className={isDark ? 'text-white' : 'text-gray-900'}>Progress Level JLPT</CardTitle>
               <CardDescription>
                 Pantau perkembangan belajarmu di setiap level
               </CardDescription>
@@ -804,22 +830,24 @@ export default function DashboardPage() {
                   return (
                     <Link key={level} href={`/vocabulary?jlpt_level=${level}`}>
                       <motion.div 
-                        className="text-center p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 cursor-pointer"
+                        className={`text-center p-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                          isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'
+                        }`}
                         whileHover={{ y: -4 }}
                         whileTap={{ scale: 0.98 }}
                       >
-                        <div className="text-lg font-bold bg-gradient-to-r from-japanese-500 to-japanese-600 bg-clip-text text-transparent">
+                        <div className="text-lg font-bold bg-gradient-to-r from-emerald-500 to-emerald-600 bg-clip-text text-transparent">
                           {level}
                         </div>
-                        <div className="text-2xl font-bold mt-2 text-gray-900 dark:text-white">
+                        <div className={`text-2xl font-bold mt-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                           <AnimatedNumber value={progress.percentage} duration={800} />%
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           <AnimatedNumber value={progress.mastered} duration={500} />/{progress.total} dihafal
                         </div>
                         <div className="mt-2 h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                           <motion.div 
-                            className="h-full bg-gradient-to-r from-japanese-500 to-japanese-600 rounded-full"
+                            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full"
                             initial={{ width: 0 }}
                             animate={{ width: `${progress.percentage}%` }}
                             transition={{ duration: 0.8, delay: 0.3 }}
@@ -842,14 +870,16 @@ export default function DashboardPage() {
             transition={{ delay: 0.7 }}
             className="mt-6"
           >
-            <Card className="bg-gradient-to-r from-japanese-50 to-japanese-100 dark:from-japanese-950/30 dark:to-japanese-900/20 border-0 rounded-2xl shadow-md">
+            <Card className={`rounded-2xl border-0 shadow-md ${
+              isDark ? 'bg-emerald-950/20 border border-emerald-800/30' : 'bg-emerald-50'
+            }`}>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3 flex-wrap justify-between">
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                    <h3 className={`font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       Selamat! Kamu sudah menghafal <AnimatedNumber value={masteredCount} duration={1000} /> kosakata!
                     </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       Terus pertahankan konsistensi belajarmu setiap hari.
                     </p>
                   </div>
