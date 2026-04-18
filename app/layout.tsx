@@ -26,7 +26,7 @@ const noto = Noto_Sans_JP({
 })
 
 // ─── SEO Metadata ─────────────────────────────────────────────────────────────
-const siteUrl = "https://pipinipon.id"
+const siteUrl = "https://pipinipon.my.id"
 const siteName = "Pipinipon"
 const siteDescription =
   "Platform belajar bahasa Jepang online terbaik di Indonesia. Kuasai kosakata, tata bahasa, dan persiapkan ujian JLPT N5 hingga N1 dengan metode modern dan menyenangkan."
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
     videos: [],
     audio: [],
     countryName: "Indonesia",
-    emails: ["halo@pipinipon.id"],
+    emails: ["halo@pipinipon.my.id"],
     phoneNumbers: [],
   },
   twitter: {
@@ -212,7 +212,7 @@ const jsonLd = {
       ],
       contactPoint: {
         "@type": "ContactPoint",
-        email: "halo@pipinipon.id",
+        email: "halo@pipinipon.my.id",
         contactType: "customer service",
         availableLanguage: ["Indonesian", "English", "Japanese"],
         areaServed: "ID",
@@ -441,7 +441,7 @@ const socialLinks = [
   { Icon: IconInstagram, href: "https://instagram.com/pipinipon", label: "Instagram" },
   { Icon: IconYoutube, href: "https://youtube.com/@pipinipon", label: "YouTube" },
   { Icon: IconTwitterX, href: "https://twitter.com/pipinipon", label: "Twitter / X" },
-  { Icon: IconMail, href: "mailto:halo@pipinipon.id", label: "Email" },
+  { Icon: IconMail, href: "mailto:halo@pipinipon.my.id", label: "Email" },
 ]
 
 // Loading component untuk Suspense
