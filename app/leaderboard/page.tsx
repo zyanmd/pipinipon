@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Trophy, Medal, Crown, Star, TrendingUp, Award, Users, Zap } from "lucide-react"
+import { Trophy, Medal, Crown, Star, TrendingUp, Award, Users, Zap, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { VerifiedBadge } from "@/components/ui/verified-badge"
@@ -29,24 +29,65 @@ export default function LeaderboardPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<LeaderboardUser[]>([])
   const [loading, setLoading] = useState(true)
-  const [timeFrame, setTimeFrame] = useState<"all" | "weekly" | "monthly">("all")
+  const [refreshing, setRefreshing] = useState(false)
+
+  const fetchAllUsers = async () => {
+    setLoading(true)
+    try {
+      let allUsers: LeaderboardUser[] = []
+      let page = 1
+      let hasMore = true
+      const perPage = 100
+      
+      // Fetch all pages to get complete user list
+      while (hasMore) {
+        try {
+          const response = await userAPI.getAll({ page, per_page: perPage })
+          const usersData = response.data.data.users || []
+          allUsers = [...allUsers, ...usersData]
+          
+          // Check if there are more pages
+          const pagination = response.data.data.pagination
+          hasMore = pagination && page < pagination.pages
+          page++
+        } catch (error) {
+          console.error("Error fetching page:", error)
+          hasMore = false
+        }
+      }
+      
+      console.log(`Total users fetched: ${allUsers.length}`)
+      
+      // Urutkan berdasarkan XP tertinggi ke terendah (pastikan XP adalah number)
+      const sortedUsers = [...allUsers].sort((a, b) => {
+        const xpA = typeof a.xp === 'number' ? a.xp : 0
+        const xpB = typeof b.xp === 'number' ? b.xp : 0
+        return xpB - xpA
+      })
+      
+      // Log top 5 users for debugging
+      console.log("Top 5 users by XP:")
+      sortedUsers.slice(0, 5).forEach((u, idx) => {
+        console.log(`${idx + 1}. ${u.username}: ${u.xp} XP`)
+      })
+      
+      setUsers(sortedUsers)
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true)
-      try {
-        const response = await userAPI.getAll({ per_page: 100 })
-        const allUsers = response.data.data.users || []
-        const sortedUsers = [...allUsers].sort((a, b) => (b.xp || 0) - (a.xp || 0))
-        setUsers(sortedUsers.slice(0, 50))
-      } catch (error) {
-        console.error("Error fetching leaderboard:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchLeaderboard()
-  }, [timeFrame])
+    fetchAllUsers()
+  }, [])
+
+  const handleRefresh = () => {
+    setRefreshing(true)
+    fetchAllUsers()
+  }
 
   const getRankBadge = (rank: number) => {
     switch (rank) {
@@ -98,40 +139,29 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Lihat peringkat pengguna teraktif berdasarkan XP yang terkumpul
+            Lihat peringkat pengguna teraktif berdasarkan total XP yang terkumpul
           </p>
-
-          {/* Time filter */}
-          <div className="flex justify-center gap-2 mt-6">
-            <Button
-              variant={timeFrame === "all" ? "japanese" : "outline"}
-              size="sm"
-              onClick={() => setTimeFrame("all")}
-              className="rounded-full"
-            >
-              Semua Waktu
-            </Button>
-            <Button
-              variant={timeFrame === "weekly" ? "japanese" : "outline"}
-              size="sm"
-              onClick={() => setTimeFrame("weekly")}
-              className="rounded-full"
-            >
-              Minggu Ini
-            </Button>
-            <Button
-              variant={timeFrame === "monthly" ? "japanese" : "outline"}
-              size="sm"
-              onClick={() => setTimeFrame("monthly")}
-              className="rounded-full"
-            >
-              Bulan Ini
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="mt-4 rounded-full"
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
+            Refresh
+          </Button>
         </motion.div>
 
+        {/* Total Users Stats */}
+        <div className="text-center mb-8">
+          <p className="text-sm text-muted-foreground">
+            Total {users.length} pengguna terdaftar
+          </p>
+        </div>
+
         {/* Podium Section */}
-        {top3.length >= 3 && (
+        {top3.length >= 3 && top3[0]?.xp > 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -255,115 +285,115 @@ export default function LeaderboardPage() {
               </div>
             </div>
           </motion.div>
+        ) : (
+          <div className="text-center py-12 mb-8">
+            <Trophy className="w-16 h-16 mx-auto text-muted-foreground opacity-30 mb-4" />
+            <p className="text-muted-foreground">Belum ada data leaderboard</p>
+          </div>
         )}
 
         {/* Full Leaderboard Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-japanese-500" />
-                Semua Peringkat
-              </CardTitle>
-              <CardDescription>
-                Daftar lengkap peringkat pengguna berdasarkan total XP
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Peringkat</th>
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Pengguna</th>
-                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Peringkat</th>
-                      <th className="text-right py-3 px-4 font-medium text-muted-foreground">Total XP</th>
-                      <th className="text-right py-3 px-4 font-medium text-muted-foreground">Streak</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {restUsers.map((u, idx) => {
-                      const rank = idx + 4
-                      const rankBadge = getRankBadge(rank - 1)
-                      return (
-                        <motion.tr
-                          key={u.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.05 * idx }}
-                          className={cn(
-                            "border-b border-border hover:bg-muted/50 transition-colors",
-                            user?.id === u.id && "bg-japanese-50 dark:bg-japanese-950/20"
-                          )}
-                        >
-                          <td className="py-3 px-4">
-                            <div className={cn(
-                              "w-8 h-8 rounded-full bg-gradient-to-r flex items-center justify-center font-bold",
-                              rankBadge.bg,
-                              rankBadge.text
-                            )}>
-                              {rank}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Link href={`/profile/${u.username}`}>
-                              <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-                                <Avatar className="h-10 w-10">
-                                  <AvatarImage src={u.avatar ? `http://localhost:5000/uploads/${u.avatar}` : undefined} />
-                                  <AvatarFallback className="bg-gradient-to-br from-japanese-500 to-japanese-600 text-white">
-                                    {u.username?.charAt(0).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-medium text-foreground">{u.username}</span>
-                                    {u.verified_badge === 1 && <VerifiedBadge size="sm" />}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">{u.rank || "Pemula"}</p>
-                                </div>
+        {restUsers.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-japanese-500" />
+                  Semua Peringkat
+                </CardTitle>
+                <CardDescription>
+                  Daftar lengkap peringkat pengguna berdasarkan total XP
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Peringkat</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Pengguna</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Gelar</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Total XP</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Streak</th>
+                       </tr>
+                    </thead>
+                    <tbody>
+                      {restUsers.map((u, idx) => {
+                        const rank = idx + 4
+                        const rankBadge = getRankBadge(rank - 1)
+                        return (
+                          <motion.tr
+                            key={u.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.05 * idx }}
+                            className={cn(
+                              "border-b border-border hover:bg-muted/50 transition-colors",
+                              user?.id === u.id && "bg-japanese-50 dark:bg-japanese-950/20"
+                            )}
+                          >
+                            <td className="py-3 px-4">
+                              <div className={cn(
+                                "w-8 h-8 rounded-full bg-gradient-to-r flex items-center justify-center font-bold",
+                                rankBadge.bg,
+                                rankBadge.text
+                              )}>
+                                {rank}
                               </div>
-                            </Link>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="text-sm text-muted-foreground">{u.rank || "Ashigaru V"}</span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Star className="h-4 w-4 text-yellow-500" />
-                              <span className="font-bold text-foreground">{u.xp || 0}</span>
-                              <span className="text-xs text-muted-foreground">XP</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <TrendingUp className="h-4 w-4 text-orange-500" />
-                              <span className="font-medium text-foreground">{u.streak || 0}</span>
-                              <span className="text-xs text-muted-foreground">hari</span>
-                            </div>
-                          </td>
-                        </motion.tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {restUsers.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Belum ada pengguna lain</p>
+                             </td>
+                            <td className="py-3 px-4">
+                              <Link href={`/profile/${u.username}`}>
+                                <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={u.avatar ? `http://localhost:5000/uploads/${u.avatar}` : undefined} />
+                                    <AvatarFallback className="bg-gradient-to-br from-japanese-500 to-japanese-600 text-white">
+                                      {u.username?.charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-medium text-foreground">{u.username}</span>
+                                      {u.verified_badge === 1 && <VerifiedBadge size="sm" />}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{u.rank || "Pemula"}</p>
+                                  </div>
+                                </div>
+                              </Link>
+                             </td>
+                            <td className="py-3 px-4">
+                              <span className="text-sm text-muted-foreground">{u.rank || "Ashigaru V"}</span>
+                             </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Star className="h-4 w-4 text-yellow-500" />
+                                <span className="font-bold text-foreground">{u.xp || 0}</span>
+                                <span className="text-xs text-muted-foreground">XP</span>
+                              </div>
+                             </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <TrendingUp className="h-4 w-4 text-orange-500" />
+                                <span className="font-medium text-foreground">{u.streak || 0}</span>
+                                <span className="text-xs text-muted-foreground">hari</span>
+                              </div>
+                             </td>
+                          </motion.tr>
+                        )
+                      })}
+                    </tbody>
+                   </table>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* User's Rank Card */}
-        {user && !top3.find(u => u.id === user.id) && (
+        {user && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
