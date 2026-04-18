@@ -1,4 +1,3 @@
-// app/layout.tsx
 import type { Metadata, Viewport } from "next"
 import { Noto_Sans_JP, Outfit } from "next/font/google"
 import "./globals.css"
@@ -161,7 +160,7 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
 }
 
-// Schema.org untuk rating, review, WebSite, Organization, Course, Product
+// Schema.org yang diperbaiki untuk Google Search Console
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -176,7 +175,7 @@ const jsonLd = {
         "@type": "SearchAction",
         target: {
           "@type": "EntryPoint",
-          urlTemplate: `${siteUrl}/vocabulary?q={search_term_string}`,
+          urlTemplate: `${siteUrl}/vocabulary?search={search_term_string}`,
         },
         "query-input": "required name=search_term_string",
       },
@@ -264,6 +263,7 @@ const jsonLd = {
       "@id": `${siteUrl}/#product`,
       name: siteName,
       description: siteDescription,
+      image: `${siteUrl}/logo.png`,  // ✅ Ditambahkan kolom image
       brand: {
         "@type": "Brand",
         name: siteName,
@@ -326,6 +326,24 @@ const jsonLd = {
         priceCurrency: "IDR",
         availability: "https://schema.org/OnlineOnly",
         url: siteUrl,
+        // ✅ Ditambahkan shippingDetails dan hasMerchantReturnPolicy (opsional tapi direkomendasikan)
+        shippingDetails: {
+          "@type": "OfferShippingDetails",
+          shippingRate: {
+            "@type": "MonetaryAmount",
+            value: "0",
+            currency: "IDR",
+          },
+          shippingDestination: {
+            "@type": "DefinedRegion",
+            addressCountry: "ID",
+          },
+        },
+        hasMerchantReturnPolicy: {
+          "@type": "MerchantReturnPolicy",
+          applicableCountry: "ID",
+          returnPolicyCategory: "https://schema.org/NotPermitted",
+        },
       },
     },
     {
@@ -338,6 +356,13 @@ const jsonLd = {
       height: 512,
       license: "https://creativecommons.org/licenses/by/4.0/",
       copyrightNotice: `(c) ${new Date().getFullYear()} ${siteName}`,
+      // ✅ Ditambahkan kolom yang diminta
+      creditText: `Logo ${siteName}`,
+      creator: {
+        "@type": "Organization",
+        name: siteName,
+      },
+      acquireLicensePage: `${siteUrl}/terms`,
     },
     {
       "@type": "ImageObject",
@@ -347,6 +372,13 @@ const jsonLd = {
       caption: "Preview gambar Pipinipon untuk media sosial",
       width: 1200,
       height: 630,
+      // ✅ Ditambahkan kolom yang diminta
+      creditText: `Open Graph Image ${siteName}`,
+      creator: {
+        "@type": "Organization",
+        name: siteName,
+      },
+      acquireLicensePage: `${siteUrl}/terms`,
     },
   ],
 }

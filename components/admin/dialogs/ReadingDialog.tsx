@@ -20,9 +20,12 @@ interface ReadingDialogProps {
 
 const getReadingThumbnailUrl = (thumbnail: string | null | undefined): string | null => {
   if (!thumbnail) return null
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
+  // If it's already a full URL
   if (thumbnail.startsWith('http')) return thumbnail
-  if (thumbnail.startsWith('/')) return `${baseUrl}${thumbnail}`
+  // If it starts with slash
+  if (thumbnail.startsWith('/')) return thumbnail
+  // Otherwise, construct the URL
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://api.pipinipon.site'
   return `${baseUrl}/uploads/readings/${thumbnail}`
 }
 
@@ -30,6 +33,7 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
   const [submitting, setSubmitting] = useState(false)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [readingForm, setReadingForm] = useState({
@@ -99,7 +103,6 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
-      // Small delay to prevent flash when reopening
       const timer = setTimeout(() => {
         if (!selectedReading) {
           setReadingForm({
@@ -141,6 +144,9 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
 
   const removeThumbnail = () => {
     setThumbnailFile(null)
+    if (thumbnailPreview && thumbnailPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(thumbnailPreview)
+    }
     setThumbnailPreview(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
@@ -150,28 +156,46 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
   }
 
   const uploadReadingThumbnail = async (file: File): Promise<string | null> => {
+    setUploadingThumbnail(true)
     try {
       const formData = new FormData()
       formData.append('thumbnail', file)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}/api/reading/upload-thumbnail`, {
+      
+      // Gunakan API_URL yang benar
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pipinipon.site/api'
+      
+      console.log("Uploading thumbnail to:", `${API_BASE_URL}/reading/upload-thumbnail`)
+      
+      const response = await fetch(`${API_BASE_URL}/reading/upload-thumbnail`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        },
         body: formData
       })
+      
+      console.log("Upload response status:", response.status)
       
       // Check if response is JSON
       const contentType = response.headers.get('content-type')
       if (!contentType || !contentType.includes('application/json')) {
-        console.error("Server returned non-JSON response")
+        const text = await response.text()
+        console.error("Server returned non-JSON response:", text)
         return null
       }
       
       const data = await response.json()
-      if (data.success) return data.data.filename
+      console.log("Upload response data:", data)
+      
+      if (data.success) {
+        return data.data.filename
+      }
       return null
     } catch (error) {
       console.error("Error uploading thumbnail:", error)
       return null
+    } finally {
+      setUploadingThumbnail(false)
     }
   }
 
@@ -183,13 +207,14 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
 
     setSubmitting(true)
     try {
-      let thumbnailUrl = readingForm.thumbnail
+      let thumbnailFilename = readingForm.thumbnail
       
       // Upload new thumbnail if selected
       if (thumbnailFile) {
         const uploadedFilename = await uploadReadingThumbnail(thumbnailFile)
         if (uploadedFilename) {
-          thumbnailUrl = uploadedFilename
+          thumbnailFilename = uploadedFilename
+          console.log("Thumbnail uploaded successfully:", uploadedFilename)
         } else {
           toast({ title: "Warning", description: "Gagal upload thumbnail, melanjutkan tanpa thumbnail", variant: "default" })
         }
@@ -197,8 +222,10 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
 
       const readingData = { 
         ...readingForm, 
-        thumbnail: thumbnailUrl 
+        thumbnail: thumbnailFilename 
       }
+
+      console.log("Saving reading data:", readingData)
 
       let result
       if (selectedReading) {
@@ -222,6 +249,15 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
       setSubmitting(false)
     }
   }
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (thumbnailPreview && thumbnailPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnailPreview)
+      }
+    }
+  }, [thumbnailPreview])
 
   // Get display thumbnail URL
   const displayThumbnail = thumbnailPreview || getReadingThumbnailUrl(readingForm.thumbnail)
@@ -264,7 +300,11 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
                   onClick={() => fileInputRef.current?.click()} 
                   className="w-full h-32 rounded-lg border-2 border-dashed border-border bg-muted/30 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50 mb-3"
                 >
-                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  {uploadingThumbnail ? (
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
+                  ) : (
+                    <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  )}
                   <p className="text-sm text-muted-foreground">Klik untuk upload thumbnail</p>
                   <p className="text-xs text-muted-foreground">PNG, JPG, JPEG, WEBP. Maks 5MB</p>
                 </div>
@@ -397,8 +437,8 @@ export function ReadingDialog({ open, onOpenChange, selectedReading, onSuccess }
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
-          <Button onClick={handleSave} disabled={submitting}>
-            {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          <Button onClick={handleSave} disabled={submitting || uploadingThumbnail}>
+            {(submitting || uploadingThumbnail) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {selectedReading ? "Update" : "Simpan"}
           </Button>
         </DialogFooter>
