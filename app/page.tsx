@@ -459,15 +459,7 @@ export default function Home() {
           style={{ opacity: heroOpacity }}
         >
           <div className="max-w-2xl">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={ready ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 0.15, duration: 0.5 }}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border ${badgeCls} text-sm font-medium mb-8`}
-            >
-              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-              Platform belajar bahasa Jepang #1 di Indonesia
-            </motion.div>
+          
 
             <motion.h1
               className={`text-6xl md:text-7xl xl:text-8xl font-black ${textPri} leading-[0.9] tracking-tight mb-6`}
