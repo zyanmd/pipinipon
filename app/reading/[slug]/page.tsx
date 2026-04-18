@@ -56,7 +56,7 @@ function parseFurigana(text: string) {
   return parts
 }
 
-// Komponen Share Modal - Sederhana (copy link only)
+// Komponen Share Modal
 function ShareModal({ isOpen, onClose, url, title }: { isOpen: boolean; onClose: () => void; url: string; title: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -143,11 +143,14 @@ export default function ReadingDetailPage() {
 
   const slug = params.slug as string
   const [shareUrl, setShareUrl] = useState('')
+  const [fullImageUrl, setFullImageUrl] = useState<string>('')
+  const [siteUrl, setSiteUrl] = useState('https://pipinipon.site')
 
   useEffect(() => {
     setMounted(true)
     if (typeof window !== 'undefined') {
       setShareUrl(window.location.href)
+      setSiteUrl(window.location.origin)
     }
   }, [])
 
@@ -159,6 +162,13 @@ export default function ReadingDetailPage() {
         const data = response.data.data
         setReading(data)
         setIsBookmarked(data.is_bookmarked || false)
+        
+        // Set full image URL for OG image
+        if (data.thumbnail) {
+          const imgUrl = getReadingImageUrl(data.thumbnail)
+          setFullImageUrl(imgUrl || '')
+        }
+        
         if (data.progress) {
           const isCompleted = data.progress.completed || false
           setProgress({
@@ -325,26 +335,52 @@ export default function ReadingDetailPage() {
     }
   }
 
+  // Get clean description for meta tags
+  const getCleanDescription = () => {
+    if (reading?.excerpt) return reading.excerpt
+    if (reading?.content) {
+      const cleanText = reading.content.replace(/<[^>]*>/g, '').substring(0, 160)
+      return cleanText
+    }
+    return "Baca artikel menarik tentang bahasa Jepang di Pipinipon"
+  }
+
+  // Get clean title for meta tags
+  const getCleanTitle = () => {
+    return `${reading?.title || "Artikel"} | Pipinipon - Belajar Bahasa Jepang`
+  }
+
+  // Get absolute image URL
+  const getAbsoluteImageUrl = () => {
+    if (fullImageUrl) return fullImageUrl
+    if (reading?.thumbnail) {
+      const imgUrl = getReadingImageUrl(reading.thumbnail)
+      if (imgUrl && imgUrl.startsWith('http')) return imgUrl
+      if (imgUrl) return `${siteUrl}${imgUrl}`
+    }
+    return `${siteUrl}/og-image.jpg`
+  }
+
   // JSON-LD Schema untuk SEO
   const jsonLdSchema = reading ? {
     "@context": "https://schema.org",
     "@type": "Article",
     "headline": reading.title,
-    "description": reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, ''),
-    "image": getReadingImageUrl(reading.thumbnail),
+    "description": getCleanDescription(),
+    "image": getAbsoluteImageUrl(),
     "datePublished": reading.published_at || reading.created_at,
     "dateModified": reading.updated_at || reading.published_at || reading.created_at,
     "author": {
       "@type": "Person",
       "name": reading.author_name || "Pipinipon",
-      "url": "https://pipinipon.site"
+      "url": siteUrl
     },
     "publisher": {
       "@type": "Organization",
       "name": "Pipinipon",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://pipinipon.site/logo.png"
+        "url": `${siteUrl}/logo.png`
       }
     },
     "mainEntityOfPage": {
@@ -359,6 +395,15 @@ export default function ReadingDetailPage() {
       "name": "Bahasa Jepang"
     }
   } : null
+
+  // Social media share URLs
+  const shareUrls = {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(reading?.title || '')}&url=${encodeURIComponent(shareUrl)}`,
+    whatsapp: `https://wa.me/?text=${encodeURIComponent(`${reading?.title || ''} - ${shareUrl}`)}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(reading?.title || '')}`,
+    linkedin: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(reading?.title || '')}`,
+  }
 
   if (!mounted || loading) {
     return (
@@ -386,29 +431,57 @@ export default function ReadingDetailPage() {
 
   const imageUrl = getReadingImageUrl(reading.thumbnail)
   const isCompleted = progress.completed || hasReached100
+  const cleanDescription = getCleanDescription()
+  const cleanTitle = getCleanTitle()
+  const absoluteImageUrl = getAbsoluteImageUrl()
 
   return (
     <>
       <Head>
-        <title>{reading.title} | Pipinipon - Belajar Bahasa Jepang</title>
-        <meta name="description" content={reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, '')} />
+        {/* Basic Meta Tags */}
+        <title>{cleanTitle}</title>
+        <meta name="description" content={cleanDescription} />
         <meta name="keywords" content={`belajar bahasa jepang, ${reading.level}, membaca bahasa jepang, furigana, ${reading.category}`} />
+        <meta name="author" content={reading.author_name || "Pipinipon"} />
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="article" />
         <meta property="og:url" content={shareUrl} />
         <meta property="og:title" content={reading.title} />
-        <meta property="og:description" content={reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, '')} />
-        <meta property="og:image" content={imageUrl || "https://pipinipon.site/og-image.jpg"} />
+        <meta property="og:description" content={cleanDescription} />
+        <meta property="og:image" content={absoluteImageUrl} />
+        <meta property="og:image:secure_url" content={absoluteImageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content={reading.thumbnail_alt || reading.title} />
+        <meta property="og:site_name" content="Pipinipon" />
+        <meta property="og:locale" content="id_ID" />
         <meta property="article:published_time" content={reading.published_at || reading.created_at} />
+        <meta property="article:modified_time" content={reading.updated_at || reading.published_at || reading.created_at} />
         <meta property="article:author" content={reading.author_name || "Pipinipon"} />
+        <meta property="article:section" content={reading.category} />
+        <meta property="article:tag" content={`${reading.level}, ${reading.category}, belajar bahasa jepang`} />
         
-        {/* Twitter */}
+        {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:url" content={shareUrl} />
         <meta name="twitter:title" content={reading.title} />
-        <meta name="twitter:description" content={reading.excerpt || reading.content?.substring(0, 160).replace(/<[^>]*>/g, '')} />
-        <meta name="twitter:image" content={imageUrl || "https://pipinipon.site/og-image.jpg"} />
+        <meta name="twitter:description" content={cleanDescription} />
+        <meta name="twitter:image" content={absoluteImageUrl} />
+        <meta name="twitter:image:alt" content={reading.thumbnail_alt || reading.title} />
+        <meta name="twitter:site" content="@pipinipon" />
+        <meta name="twitter:creator" content="@pipinipon" />
+        
+        {/* WhatsApp specific (uses Open Graph) */}
+        {/* Telegram specific (uses Open Graph) */}
+        {/* LinkedIn specific (uses Open Graph) */}
+        
+        {/* Additional meta tags */}
+        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <link rel="canonical" href={shareUrl} />
+        
+        {/* Pinterest */}
+        <meta name="pinterest-rich-pin" content="true" />
       </Head>
 
       {/* JSON-LD Schema */}
@@ -556,8 +629,55 @@ export default function ReadingDetailPage() {
             ))}
           </div>
 
+          {/* Social Share Buttons */}
+          <div className="mt-8 pt-6 border-t">
+            <h3 className="text-lg font-semibold mb-4">Bagikan ke Media Sosial</h3>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={shareUrls.facebook}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-[#1877F2] text-white rounded-lg hover:bg-[#1664d8] transition-colors text-sm font-medium"
+              >
+                Facebook
+              </a>
+              <a
+                href={shareUrls.twitter}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+              >
+                Twitter
+              </a>
+              <a
+                href={shareUrls.whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-[#25D366] text-white rounded-lg hover:bg-[#20b859] transition-colors text-sm font-medium"
+              >
+                WhatsApp
+              </a>
+              <a
+                href={shareUrls.telegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-[#0088cc] text-white rounded-lg hover:bg-[#0077b3] transition-colors text-sm font-medium"
+              >
+                Telegram
+              </a>
+              <a
+                href={shareUrls.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-[#0A66C2] text-white rounded-lg hover:bg-[#0955a3] transition-colors text-sm font-medium"
+              >
+                LinkedIn
+              </a>
+            </div>
+          </div>
+
           {/* Footer Navigation */}
-          <div className="mt-12 pt-8 border-t">
+          <div className="mt-8 pt-8 border-t">
             <Button onClick={() => router.push("/reading")} variant="outline" className="w-full">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Kembali ke Daftar Artikel
