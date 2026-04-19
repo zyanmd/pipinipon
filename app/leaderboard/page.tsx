@@ -1,35 +1,52 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useTheme } from "@/components/providers/theme-provider"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { userAPI, leaderboardAPI } from "@/lib/api"
+import { leaderboardAPI } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Trophy, Medal, Crown, Star, TrendingUp, Award, Users, Zap, RefreshCw, Flame } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, useInView } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { VerifiedBadge } from "@/components/ui/verified-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-interface LeaderboardUser {
-  id: number
-  username: string
-  email: string
-  avatar: string | null
-  xp: number
-  streak: number
-  level: string
-  rank: string
-  is_verified: number
-  verified_badge: number
-  mastered_count?: number
-  completed_count?: number
-  combined_score?: number
+// ==================== ANIMATED NUMBER COMPONENT ====================
+const AnimatedNumber = ({ value, duration = 1000 }: { value: number; duration?: number }) => {
+  const [displayValue, setDisplayValue] = useState(0)
+  const ref = useRef<HTMLSpanElement>(null)
+  const isInView = useInView(ref, { once: true, amount: 0.5 })
+
+  useEffect(() => {
+    if (isInView) {
+      let startTime: number
+      let animationFrame: number
+      
+      const animate = (currentTime: number) => {
+        if (!startTime) startTime = currentTime
+        const progress = Math.min((currentTime - startTime) / duration, 1)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        setDisplayValue(Math.floor(eased * value))
+        
+        if (progress < 1) {
+          animationFrame = requestAnimationFrame(animate)
+        }
+      }
+      
+      animationFrame = requestAnimationFrame(animate)
+      return () => cancelAnimationFrame(animationFrame)
+    } else if (!isInView && displayValue !== 0) {
+      setDisplayValue(0)
+    }
+  }, [isInView, value, duration])
+
+  return <span ref={ref}>{displayValue.toLocaleString()}</span>
 }
 
+// ==================== INTERFACES ====================
 interface XPLeaderboardUser {
   rank: number
   user_id: number
@@ -39,8 +56,10 @@ interface XPLeaderboardUser {
   xp: number
   level: string
   streak: number
+  role?: string
 }
 
+// ==================== HELPER FUNCTIONS ====================
 const getImageUrl = (path: string | null | undefined): string => {
   if (!path) return ''
   if (path.startsWith('http')) return path
@@ -48,15 +67,22 @@ const getImageUrl = (path: string | null | undefined): string => {
   return `${baseUrl}/uploads/${path}`
 }
 
-const getLevelColor = (level: string): string => {
-  const colors: Record<string, string> = {
-    N5: "bg-green-500",
-    N4: "bg-sky-500", 
-    N3: "bg-amber-500",
-    N2: "bg-orange-500",
-    N1: "bg-rose-500"
+const getLevelBgClass = (level: string, isDark: boolean = false): string => {
+  const lightClasses: Record<string, string> = {
+    N5: "bg-green-100 text-green-700",
+    N4: "bg-sky-100 text-sky-700",
+    N3: "bg-amber-100 text-amber-700",
+    N2: "bg-orange-100 text-orange-700",
+    N1: "bg-rose-100 text-rose-700"
   }
-  return colors[level] || "bg-gray-500"
+  const darkClasses: Record<string, string> = {
+    N5: "bg-green-950/50 text-green-400 border border-green-500/30",
+    N4: "bg-sky-950/50 text-sky-400 border border-sky-500/30",
+    N3: "bg-amber-950/50 text-amber-400 border border-amber-500/30",
+    N2: "bg-orange-950/50 text-orange-400 border border-orange-500/30",
+    N1: "bg-rose-950/50 text-rose-400 border border-rose-500/30"
+  }
+  return isDark ? (darkClasses[level] || "bg-gray-800 text-gray-400") : (lightClasses[level] || "bg-gray-100 text-gray-600")
 }
 
 const getLevelLabel = (level: string): string => {
@@ -70,8 +96,11 @@ const getLevelLabel = (level: string): string => {
   return labels[level] || level
 }
 
+// ==================== MAIN COMPONENT ====================
 export default function LeaderboardPage() {
   const { user } = useAuth()
+  const { theme } = useTheme()
+  const isDark = theme === "dark"
   const [activeTab, setActiveTab] = useState("xp")
   const [xpLeaderboard, setXpLeaderboard] = useState<XPLeaderboardUser[]>([])
   const [streakLeaderboard, setStreakLeaderboard] = useState<XPLeaderboardUser[]>([])
@@ -87,7 +116,6 @@ export default function LeaderboardPage() {
   const fetchLeaderboards = async () => {
     setLoading(true)
     try {
-      // Fetch all leaderboards in parallel
       const [xpRes, streakRes, masteryRes, readingRes, combinedRes] = await Promise.all([
         leaderboardAPI.getXPLeaderboard({ limit: 100, period }),
         leaderboardAPI.getStreakLeaderboard({ limit: 100 }),
@@ -206,7 +234,7 @@ export default function LeaderboardPage() {
       case 3:
         return { bg: "from-amber-600 to-orange-600", text: "text-white", icon: <Medal className="h-5 w-5" /> }
       default:
-        return { bg: "from-muted to-muted", text: "text-muted-foreground", icon: null }
+        return { bg: "from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800", text: "text-gray-700 dark:text-gray-300", icon: null }
     }
   }
 
@@ -216,23 +244,25 @@ export default function LeaderboardPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <Skeleton className="h-12 w-64 mx-auto mb-4" />
-          <Skeleton className="h-4 w-96 mx-auto" />
+      <div className={cn("min-h-screen", isDark ? "bg-gray-950" : "bg-gray-50")}>
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="text-center mb-8">
+            <Skeleton className={cn("h-12 w-64 mx-auto mb-4", isDark ? "bg-gray-800" : "bg-gray-200")} />
+            <Skeleton className={cn("h-4 w-96 mx-auto", isDark ? "bg-gray-800" : "bg-gray-200")} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className={cn("h-64 rounded-xl", isDark ? "bg-gray-800" : "bg-gray-200")} />
+            ))}
+          </div>
+          <Skeleton className={cn("h-96 w-full rounded-xl", isDark ? "bg-gray-800" : "bg-gray-200")} />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-64 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-96 w-full rounded-xl" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
+    <div className={cn("min-h-screen", isDark ? "bg-gray-950" : "bg-gray-50")}>
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <motion.div
@@ -240,14 +270,19 @@ export default function LeaderboardPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 mb-4">
+          <div className={cn(
+            "inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-4",
+            isDark ? "bg-yellow-500/10 border-yellow-500/20" : "bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-yellow-500/20"
+          )}>
             <Trophy className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Papan Peringkat</span>
+            <span className={cn("text-sm font-medium", isDark ? "text-yellow-400" : "text-yellow-600")}>
+              Papan Peringkat
+            </span>
           </div>
           <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent mb-4">
             Leaderboard
           </h1>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
+          <p className={cn("max-w-2xl mx-auto", isDark ? "text-gray-400" : "text-gray-600")}>
             Lihat peringkat pengguna teraktif dan raih posisi teratas!
           </p>
           <Button
@@ -265,7 +300,7 @@ export default function LeaderboardPage() {
         {/* Tabs */}
         <div className="mb-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full justify-start mb-6">
+            <TabsList className={cn("w-full justify-start mb-6", isDark ? "bg-gray-800" : "bg-gray-100")}>
               <TabsTrigger value="xp" className="flex items-center gap-2">
                 <Star className="h-4 w-4" /> Top XP
               </TabsTrigger>
@@ -294,7 +329,9 @@ export default function LeaderboardPage() {
                       "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
                       levelFilter === level
                         ? 'bg-orange-500 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        : isDark 
+                          ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
                     {level || 'Semua Level'}
@@ -314,7 +351,9 @@ export default function LeaderboardPage() {
                       "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
                       period === p
                         ? 'bg-orange-500 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        : isDark 
+                          ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
                     {p === 'all' ? 'Semua Waktu' : p === 'weekly' ? 'Mingguan' : 'Bulanan'}
@@ -327,7 +366,7 @@ export default function LeaderboardPage() {
 
         {/* Total Users Stats */}
         <div className="text-center mb-8">
-          <p className="text-sm text-muted-foreground">
+          <p className={cn("text-sm", isDark ? "text-gray-500" : "text-gray-400")}>
             Menampilkan {currentLeaderboard.length} pengguna teratas
           </p>
         </div>
@@ -355,7 +394,12 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
                   <Link href={`/profile/${top3[1]?.username}`}>
-                    <div className="bg-gradient-to-b from-gray-100 to-gray-200 dark:from-gray-800/50 dark:to-gray-900/50 rounded-t-2xl p-6 pt-8 shadow-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:scale-105 transition-transform duration-300">
+                    <div className={cn(
+                      "rounded-t-2xl p-6 pt-8 shadow-xl border cursor-pointer hover:scale-105 transition-transform duration-300",
+                      isDark 
+                        ? "bg-gray-800/50 border-gray-700 hover:bg-gray-800"
+                        : "bg-gradient-to-b from-gray-100 to-gray-200 border-gray-200"
+                    )}>
                       <Avatar className="w-20 h-20 mx-auto mb-3 ring-4 ring-gray-400 dark:ring-gray-600">
                         <AvatarImage src={getImageUrl(top3[1]?.avatar)} />
                         <AvatarFallback className="bg-gradient-to-br from-gray-400 to-gray-500 text-white text-2xl">
@@ -363,20 +407,24 @@ export default function LeaderboardPage() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex items-center justify-center gap-1 mb-1">
-                        <p className="font-bold text-lg text-foreground">{top3[1]?.username}</p>
+                        <p className={cn("font-bold text-lg", isDark ? "text-white" : "text-gray-900")}>
+                          {top3[1]?.username}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">Peringkat 2</p>
-                      <div className="flex items-center justify-center gap-2 text-yellow-600 dark:text-yellow-400">
+                      <p className="text-sm text-gray-500 mb-2">Peringkat 2</p>
+                      <div className="flex items-center justify-center gap-2 text-yellow-500">
                         {getStatIcon()}
-                        <span className="font-bold text-xl">{getStatValue(top3[1])}</span>
+                        <span className="font-bold text-xl">
+                          <AnimatedNumber value={getStatValue(top3[1])} />
+                        </span>
                         <span className="text-xs">{getStatLabel()}</span>
                       </div>
-                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-xs">
-                        {top3[1]?.level && getLevelLabel(top3[1].level)}
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-gray-700">
+                        {getLevelLabel(top3[1]?.level)}
                       </div>
                     </div>
                   </Link>
-                  <div className="h-4 bg-gradient-to-b from-gray-200 to-gray-300 dark:from-gray-800 dark:to-gray-900 rounded-b-lg" />
+                  <div className={cn("h-4 rounded-b-lg", isDark ? "bg-gray-800" : "bg-gradient-to-b from-gray-200 to-gray-300")} />
                 </motion.div>
               </div>
 
@@ -394,29 +442,38 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
                   <Link href={`/profile/${top3[0]?.username}`}>
-                    <div className="bg-gradient-to-b from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/10 rounded-t-2xl p-6 pt-10 shadow-2xl border border-yellow-200 dark:border-yellow-800/50 cursor-pointer hover:scale-105 transition-transform duration-300">
-                      <Avatar className="w-28 h-28 mx-auto mb-3 ring-4 ring-yellow-500 dark:ring-yellow-600">
+                    <div className={cn(
+                      "rounded-t-2xl p-6 pt-10 shadow-2xl border cursor-pointer hover:scale-105 transition-transform duration-300",
+                      isDark 
+                        ? "bg-gradient-to-b from-yellow-950/20 to-amber-950/10 border-yellow-800/50"
+                        : "bg-gradient-to-b from-yellow-50 to-amber-50 border-yellow-200"
+                    )}>
+                      <Avatar className="w-28 h-28 mx-auto mb-3 ring-4 ring-yellow-500">
                         <AvatarImage src={getImageUrl(top3[0]?.avatar)} />
                         <AvatarFallback className="bg-gradient-to-br from-yellow-500 to-amber-500 text-white text-3xl">
                           {top3[0]?.username?.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex items-center justify-center gap-1 mb-1">
-                        <p className="font-bold text-xl text-foreground">{top3[0]?.username}</p>
+                        <p className={cn("font-bold text-xl", isDark ? "text-white" : "text-gray-900")}>
+                          {top3[0]?.username}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">Peringkat 1</p>
-                      <div className="flex items-center justify-center gap-2 text-yellow-600 dark:text-yellow-400">
+                      <p className="text-sm text-gray-500 mb-2">Peringkat 1</p>
+                      <div className="flex items-center justify-center gap-2 text-yellow-500">
                         {getStatIcon()}
-                        <span className="font-bold text-2xl">{getStatValue(top3[0])}</span>
+                        <span className="font-bold text-2xl">
+                          <AnimatedNumber value={getStatValue(top3[0])} duration={1500} />
+                        </span>
                         <span className="text-xs">{getStatLabel()}</span>
                       </div>
-                      <div className="mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs">
+                      <div className="mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
                         <Zap className="h-3 w-3" />
                         Top Leader
                       </div>
                     </div>
                   </Link>
-                  <div className="h-6 bg-gradient-to-b from-yellow-100 to-yellow-200 dark:from-yellow-900/30 dark:to-yellow-800/30 rounded-b-lg" />
+                  <div className={cn("h-6 rounded-b-lg", isDark ? "bg-yellow-900/30" : "bg-gradient-to-b from-yellow-100 to-yellow-200")} />
                 </motion.div>
               </div>
 
@@ -434,36 +491,45 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
                   <Link href={`/profile/${top3[2]?.username}`}>
-                    <div className="bg-gradient-to-b from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/10 rounded-t-2xl p-6 pt-8 shadow-xl border border-amber-200 dark:border-amber-800/50 cursor-pointer hover:scale-105 transition-transform duration-300">
-                      <Avatar className="w-20 h-20 mx-auto mb-3 ring-4 ring-amber-600 dark:ring-amber-700">
+                    <div className={cn(
+                      "rounded-t-2xl p-6 pt-8 shadow-xl border cursor-pointer hover:scale-105 transition-transform duration-300",
+                      isDark 
+                        ? "bg-gradient-to-b from-amber-950/20 to-orange-950/10 border-amber-800/50"
+                        : "bg-gradient-to-b from-amber-50 to-orange-50 border-amber-200"
+                    )}>
+                      <Avatar className="w-20 h-20 mx-auto mb-3 ring-4 ring-amber-600">
                         <AvatarImage src={getImageUrl(top3[2]?.avatar)} />
                         <AvatarFallback className="bg-gradient-to-br from-amber-600 to-orange-600 text-white text-2xl">
                           {top3[2]?.username?.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex items-center justify-center gap-1 mb-1">
-                        <p className="font-bold text-lg text-foreground">{top3[2]?.username}</p>
+                        <p className={cn("font-bold text-lg", isDark ? "text-white" : "text-gray-900")}>
+                          {top3[2]?.username}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">Peringkat 3</p>
+                      <p className="text-sm text-gray-500 mb-2">Peringkat 3</p>
                       <div className="flex items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
                         {getStatIcon()}
-                        <span className="font-bold text-xl">{getStatValue(top3[2])}</span>
+                        <span className="font-bold text-xl">
+                          <AnimatedNumber value={getStatValue(top3[2])} />
+                        </span>
                         <span className="text-xs">{getStatLabel()}</span>
                       </div>
-                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-xs">
-                        {top3[2]?.level && getLevelLabel(top3[2].level)}
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-100 dark:bg-amber-900/30">
+                        {getLevelLabel(top3[2]?.level)}
                       </div>
                     </div>
                   </Link>
-                  <div className="h-4 bg-gradient-to-b from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30 rounded-b-lg" />
+                  <div className={cn("h-4 rounded-b-lg", isDark ? "bg-amber-900/30" : "bg-gradient-to-b from-amber-100 to-amber-200")} />
                 </motion.div>
               </div>
             </div>
           </motion.div>
         ) : (
           <div className="text-center py-12 mb-8">
-            <Trophy className="w-16 h-16 mx-auto text-muted-foreground opacity-30 mb-4" />
-            <p className="text-muted-foreground">Belum ada data leaderboard</p>
+            <Trophy className={cn("w-16 h-16 mx-auto mb-4 opacity-30", isDark ? "text-gray-700" : "text-gray-300")} />
+            <p className={cn(isDark ? "text-gray-500" : "text-gray-400")}>Belum ada data leaderboard</p>
           </div>
         )}
 
@@ -474,13 +540,13 @@ export default function LeaderboardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <Card className="border-border">
+            <Card className={cn("border", isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200")}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-orange-500" />
                   {getLeaderboardTitle()}
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className={isDark ? "text-gray-400" : "text-gray-500"}>
                   {getLeaderboardDescription()}
                 </CardDescription>
               </CardHeader>
@@ -488,11 +554,11 @@ export default function LeaderboardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Peringkat</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Pengguna</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Level</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">{getLeaderboardTitle()}</th>
+                      <tr className={cn("border-b", isDark ? "border-gray-800" : "border-gray-200")}>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500">Peringkat</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500">Pengguna</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500">Level</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-500">{getLeaderboardTitle()}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -506,8 +572,9 @@ export default function LeaderboardPage() {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.05 * idx }}
                             className={cn(
-                              "border-b border-border hover:bg-muted/50 transition-colors",
-                              user?.id === u.user_id && "bg-orange-50 dark:bg-orange-950/20"
+                              "border-b transition-colors",
+                              isDark ? "border-gray-800 hover:bg-gray-800/50" : "border-gray-100 hover:bg-gray-50",
+                              user?.id === u.user_id && (isDark ? "bg-orange-950/20" : "bg-orange-50")
                             )}
                           >
                             <td className="py-3 px-4">
@@ -530,9 +597,14 @@ export default function LeaderboardPage() {
                                   </Avatar>
                                   <div>
                                     <div className="flex items-center gap-1">
-                                      <span className="font-medium text-foreground">{u.username}</span>
+                                      <span className={cn("font-medium", isDark ? "text-white" : "text-gray-900")}>
+                                        {u.username}
+                                      </span>
+                                      {(u as any).role === 'admin' && (
+                                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500 text-white">Admin</span>
+                                      )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground">{u.name || u.username}</p>
+                                    <p className="text-xs text-gray-500">{u.name || u.username}</p>
                                   </div>
                                 </div>
                               </Link>
@@ -540,8 +612,7 @@ export default function LeaderboardPage() {
                             <td className="py-3 px-4">
                               <span className={cn(
                                 "text-xs px-2 py-1 rounded-full",
-                                getLevelColor(u.level),
-                                "bg-opacity-20 text-foreground"
+                                getLevelBgClass(u.level, isDark)
                               )}>
                                 {getLevelLabel(u.level)}
                               </span>
@@ -549,8 +620,10 @@ export default function LeaderboardPage() {
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1">
                                 {getStatIcon()}
-                                <span className="font-bold text-foreground">{getStatValue(u)}</span>
-                                <span className="text-xs text-muted-foreground">{getStatLabel()}</span>
+                                <span className={cn("font-bold", isDark ? "text-white" : "text-gray-900")}>
+                                  <AnimatedNumber value={getStatValue(u)} />
+                                </span>
+                                <span className="text-xs text-gray-500">{getStatLabel()}</span>
                               </div>
                             </td>
                           </motion.tr>
@@ -572,7 +645,12 @@ export default function LeaderboardPage() {
             transition={{ delay: 0.6 }}
             className="mt-6"
           >
-            <Card className="border-orange-200 dark:border-orange-800 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-900/20">
+            <Card className={cn(
+              "border",
+              isDark 
+                ? "border-orange-800 bg-gradient-to-r from-orange-950/30 to-amber-900/20" 
+                : "border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50"
+            )}>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <Link href={`/profile/${user.username}`}>
@@ -582,9 +660,11 @@ export default function LeaderboardPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-semibold text-foreground">Peringkat Anda</p>
+                          <p className={cn("font-semibold", isDark ? "text-white" : "text-gray-900")}>
+                            Peringkat Anda
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-500">
                           Total XP: {user.xp || 0} | Streak: {user.streak || 0} hari
                         </p>
                       </div>
@@ -592,8 +672,10 @@ export default function LeaderboardPage() {
                   </Link>
                   <div className="flex items-center gap-2">
                     <Award className="h-5 w-5 text-orange-500" />
-                    <span className="font-medium text-foreground">{currentUserRank}</span>
-                    <span className="text-muted-foreground">dari {currentLeaderboard.length} pengguna</span>
+                    <span className={cn("font-medium", isDark ? "text-white" : "text-gray-900")}>
+                      {currentUserRank}
+                    </span>
+                    <span className="text-gray-500">dari {currentLeaderboard.length} pengguna</span>
                   </div>
                 </div>
               </CardContent>
