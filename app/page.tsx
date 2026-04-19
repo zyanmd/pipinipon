@@ -63,7 +63,7 @@ const featureItems = [
     title: "Latihan Adaptif Berbasis AI",
     description:
       "Teknologi AI canggih yang menyesuaikan tingkat kesulitan soal berdasarkan performamu. Fokus pada area yang masih lemah dan percepat proses belajarmu hingga 2x lebih efektif.",
-    image: "/ai-feature.png",
+    image: "/3.png",
     alt: "Latihan adaptif AI",
     badge: "AI-Powered",
     color: "#2B6CB0",
@@ -73,7 +73,7 @@ const featureItems = [
     title: "Komunitas Belajar Terbesar di Indonesia",
     description:
       "Bergabung dengan lebih dari 50.000 pelajar aktif. Diskusikan materi, tanyakan soal sulit, dan dapatkan motivasi dari sesama pembelajar bahasa Jepang di forum eksklusif kami.",
-    image: "/community-feature.png",
+    image: "/4.png",
     alt: "Komunitas belajar bahasa Jepang",
     badge: "50k+ Anggota",
     color: "#276749",
