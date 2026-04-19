@@ -176,6 +176,44 @@ export const readingAPI = {
   getStats: () => api.get('/reading/stats'),
 }
 
+// ==================== LEADERBOARD API ====================
+export const leaderboardAPI = {
+  /**
+   * Get XP leaderboard
+   * @param params - { limit, period ('all', 'weekly', 'monthly') }
+   */
+  getXPLeaderboard: (params?: { limit?: number; period?: string }) =>
+    api.get('/leaderboard/xp', { params }),
+  
+  /**
+   * Get streak leaderboard
+   * @param params - { limit }
+   */
+  getStreakLeaderboard: (params?: { limit?: number }) =>
+    api.get('/leaderboard/streak', { params }),
+  
+  /**
+   * Get vocabulary mastery leaderboard
+   * @param params - { limit, level ('N5', 'N4', 'N3', 'N2', 'N1') }
+   */
+  getMasteryLeaderboard: (params?: { limit?: number; level?: string }) =>
+    api.get('/leaderboard/mastery', { params }),
+  
+  /**
+   * Get reading leaderboard
+   * @param params - { limit }
+   */
+  getReadingLeaderboard: (params?: { limit?: number }) =>
+    api.get('/leaderboard/reading', { params }),
+  
+  /**
+   * Get combined leaderboard (XP + streak + mastery + reading)
+   * @param params - { limit }
+   */
+  getCombinedLeaderboard: (params?: { limit?: number }) =>
+    api.get('/leaderboard/combined', { params }),
+}
+
 // ==================== VOCABULARY API ====================
 export const vocabAPI = {
   getAll: (params?: any) => api.get('/vocab/', { params }),
