@@ -1,17 +1,79 @@
-# https://www.robotstxt.org/robotstxt.html
+# public/robots.txt
 User-agent: *
 Allow: /
-Disallow: /api/
-Disallow: /private/
-Disallow: /dashboard/
-Disallow: /profile/
-Disallow: /settings/
+Allow: /vocabulary$
+Allow: /grammar$
+Allow: /reading$
+Allow: /study$
+Allow: /leaderboard$
+Allow: /about$
+Allow: /contact$
 
-# Sitemap
-Sitemap: https://pipinipon.my.id/sitemap.xml
+# Disallow sensitive areas
+Disallow: /api/
+Disallow: /_next/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /register
+Disallow: /profile/*
+Disallow: /settings
+Disallow: /chat
+
+# Sitemap location
+Sitemap: https://pipinipon.web.id/sitemap.xml
 
 # Crawl delay untuk mengurangi beban server
 Crawl-delay: 1
 
-# Host
-Host: https://pipinipon.my.id
+# AI Bots
+User-agent: GPTBot
+Allow: /
+Allow: /vocabulary$
+Allow: /grammar$
+Allow: /reading$
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /profile/*
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: FacebookBot
+Allow: /
+Allow: /reading/*
+Allow: /vocabulary/*
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Twitterbot
+Allow: /
+Allow: /reading/*
+Allow: /vocabulary/*
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: LinkedInBot
+Allow: /
+Allow: /reading/*
+Allow: /vocabulary/*
+Disallow: /api/
+Disallow: /admin/
