@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { CalendarStreak } from "@/components/ui/calendar-streak"
 import { BookOpen, GraduationCap, Trophy, TrendingUp, Target, Sparkles, Clock, CheckCircle, Medal, Star, Zap, Newspaper, BookMarked, ChevronRight, Eye, Clock as ClockIcon, User } from "lucide-react"
-import { motion, useInView } from "framer-motion"
+import { motion } from "framer-motion"
 import { formatRelativeTime } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
@@ -27,43 +27,74 @@ function getValidImageUrl(url: string | null | undefined): string | null {
   return `/${url}`
 }
 
-// Komponen animasi angka
-function AnimatedNumber({ value, duration = 1000, delay = 0 }: { value: number; duration?: number; delay?: number }) {
+// Komponen animasi angka - versi sederhana yang selalu menampilkan angka
+function AnimatedNumber({ value }: { value: number }) {
   const [count, setCount] = useState(0)
-  const ref = React.useRef(null)
-  const isInView = useInView(ref, { once: true, margin: "-100px" })
 
   useEffect(() => {
-    if (!isInView) return
-
-    let startTime: number
-    let animationFrame: number
-
-    const animate = (currentTime: number) => {
-      if (!startTime) startTime = currentTime
-      const progress = Math.min((currentTime - startTime) / duration, 1)
-      
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
-      const currentValue = Math.floor(easeOutQuart * value)
-      
-      setCount(currentValue)
-      
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate)
+    // Animasi singkat saat nilai berubah
+    if (value === 0) {
+      setCount(0)
+      return
+    }
+    
+    let start = 0
+    const duration = 500
+    const step = Math.ceil(value / 20)
+    
+    const timer = setInterval(() => {
+      start += step
+      if (start >= value) {
+        setCount(value)
+        clearInterval(timer)
+      } else {
+        setCount(start)
       }
-    }
+    }, 25)
+    
+    return () => clearInterval(timer)
+  }, [value])
 
-    const timeout = setTimeout(() => {
-      animationFrame = requestAnimationFrame(animate)
-    }, delay)
+  return <span>{count.toLocaleString()}</span>
+}
 
-    return () => {
-      clearTimeout(timeout)
-      if (animationFrame) cancelAnimationFrame(animationFrame)
-    }
-  }, [value, duration, delay, isInView])
-
-  return <span ref={ref}>{count.toLocaleString()}</span>
+// Komponen stat card terpisah
+function StatCard({ stat, index, isDark }: { stat: any; index: number; isDark: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1 }}
+    >
+      <Link href={stat.link}>
+        <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 rounded-2xl border-0 shadow-md ${
+          isDark ? 'bg-gray-900' : 'bg-white'
+        }`}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {stat.title}
+            </CardTitle>
+            <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${stat.color} flex items-center justify-center shadow-sm`}>
+              <stat.icon className="w-4 h-4 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              {stat.title === "Streak" ? (
+                <AnimatedNumber value={stat.value as number} />
+              ) : stat.title === "XP Terkumpul" ? (
+                <AnimatedNumber value={stat.value as number} />
+              ) : (
+                <AnimatedNumber value={stat.value as number} />
+              )}
+              {stat.title === "Streak" && " hari"}
+            </div>
+            <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{stat.description}</p>
+          </CardContent>
+        </Card>
+      </Link>
+    </motion.div>
+  )
 }
 
 // Komponen Reading Card dengan tema
@@ -156,7 +187,7 @@ function ReadingCard({ reading, index, onPress, isDark }: { reading: any; index:
               <div className={`flex items-center gap-3 mt-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                 <span className="flex items-center gap-1">
                   <Eye className="w-3 h-3" />
-                  <AnimatedNumber value={reading.views || 0} duration={500} />
+                  <span>{reading.views?.toLocaleString() || 0}</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <ClockIcon className="w-3 h-3" />
@@ -397,7 +428,7 @@ export default function DashboardPage() {
     },
     {
       title: "Streak",
-      value: `${currentStreak} hari`,
+      value: currentStreak,
       icon: TrendingUp,
       color: "from-purple-500 to-pink-500",
       link: "/study",
@@ -530,7 +561,7 @@ export default function DashboardPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">XP menuju level {levelInfo.currentLevel + 1}</span>
                     <span className="font-medium">
-                      <AnimatedNumber value={levelInfo.xpInCurrentLevel} duration={800} delay={200} />/100 XP
+                      {levelInfo.xpInCurrentLevel}/100 XP
                     </span>
                   </div>
                   <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
@@ -542,14 +573,14 @@ export default function DashboardPage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
-                    <AnimatedNumber value={levelInfo.xpNeeded} duration={800} delay={400} /> XP lagi untuk naik level
+                    {levelInfo.xpNeeded} XP lagi untuk naik level
                   </p>
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-yellow-500/20 flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Total XP</span>
                   <span className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
-                    <AnimatedNumber value={user?.xp || 0} duration={1000} delay={100} /> XP
+                    {user?.xp || 0} XP
                   </span>
                 </div>
               </CardContent>
@@ -560,40 +591,7 @@ export default function DashboardPage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, index) => (
-            <motion.div
-              key={stat.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Link href={stat.link}>
-                <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 rounded-2xl border-0 shadow-md ${
-                  isDark ? 'bg-gray-900' : 'bg-white'
-                }`}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {stat.title}
-                    </CardTitle>
-                    <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${stat.color} flex items-center justify-center shadow-sm`}>
-                      <stat.icon className="w-4 h-4 text-white" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {stat.title === "Streak" ? (
-                        <AnimatedNumber value={currentStreak} duration={800} delay={index * 100} /> 
-                      ) : stat.title === "XP Terkumpul" ? (
-                        <AnimatedNumber value={stat.value as number} duration={1000} delay={index * 100} />
-                      ) : (
-                        <AnimatedNumber value={stat.value as number} duration={800} delay={index * 100} />
-                      )}
-                      {stat.title === "Streak" && " hari"}
-                    </div>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{stat.description}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            </motion.div>
+            <StatCard key={stat.title} stat={stat} index={index} isDark={isDark} />
           ))}
         </div>
 
@@ -711,10 +709,10 @@ export default function DashboardPage() {
                           <div className="text-right">
                             <div className="flex gap-2 text-xs">
                               <span className="text-green-600 dark:text-green-400">
-                                <AnimatedNumber value={activity.correct_count || 0} duration={500} /> benar
+                                {activity.correct_count || 0} benar
                               </span>
                               <span className="text-red-600 dark:text-red-400">
-                                <AnimatedNumber value={activity.wrong_count || 0} duration={500} /> salah
+                                {activity.wrong_count || 0} salah
                               </span>
                             </div>
                             <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -789,9 +787,9 @@ export default function DashboardPage() {
                   <div className={`mt-4 pt-4 border-t flex justify-between text-sm ${
                     isDark ? 'border-gray-800 text-gray-400' : 'border-gray-100 text-gray-500'
                   }`}>
-                    <span>Total dibaca: <AnimatedNumber value={readingStats.total_readings} duration={800} /></span>
-                    <span>Selesai: <AnimatedNumber value={readingStats.completed_readings} duration={800} /></span>
-                    <span>Progress: <AnimatedNumber value={readingStats.completion_rate} duration={800} />%</span>
+                    <span>Total dibaca: {readingStats.total_readings}</span>
+                    <span>Selesai: {readingStats.completed_readings}</span>
+                    <span>Progress: {readingStats.completion_rate}%</span>
                   </div>
                 </div>
               ) : (
@@ -840,10 +838,10 @@ export default function DashboardPage() {
                           {level}
                         </div>
                         <div className={`text-2xl font-bold mt-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          <AnimatedNumber value={progress.percentage} duration={800} />%
+                          {progress.percentage}%
                         </div>
                         <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          <AnimatedNumber value={progress.mastered} duration={500} />/{progress.total} dihafal
+                          {progress.mastered}/{progress.total} dihafal
                         </div>
                         <div className="mt-2 h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                           <motion.div 
@@ -877,7 +875,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3 flex-wrap justify-between">
                   <div>
                     <h3 className={`font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      Selamat! Kamu sudah menghafal <AnimatedNumber value={masteredCount} duration={1000} /> kosakata!
+                      Selamat! Kamu sudah menghafal {masteredCount} kosakata!
                     </h3>
                     <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                       Terus pertahankan konsistensi belajarmu setiap hari.

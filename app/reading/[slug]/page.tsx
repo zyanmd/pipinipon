@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Head from "next/head"
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import { readingAPI } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
@@ -24,37 +27,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { getReadingImageUrl } from "@/lib/image-helper"
-
-// Fungsi untuk parsing furigana (format: [text]{reading})
-function parseFurigana(text: string) {
-  if (!text) return text
-  
-  const furiganaRegex = /\[(.*?)\]{(.*?)}/g
-  const parts = []
-  let lastIndex = 0
-  let match
-  
-  while ((match = furiganaRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.substring(lastIndex, match.index))
-    }
-    parts.push(
-      <ruby key={match.index}>
-        {match[1]}
-        <rp>(</rp>
-        <rt>{match[2]}</rt>
-        <rp>)</rp>
-      </ruby>
-    )
-    lastIndex = match.index + match[0].length
-  }
-  
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex))
-  }
-  
-  return parts
-}
+import { useTheme } from "@/components/providers/theme-provider"
 
 // Komponen Share Modal
 function ShareModal({ isOpen, onClose, url, title }: { isOpen: boolean; onClose: () => void; url: string; title: string }) {
@@ -124,10 +97,140 @@ function ShareModal({ isOpen, onClose, url, title }: { isOpen: boolean; onClose:
   )
 }
 
+// Komponen untuk merender konten dengan markdown dan furigana
+function MarkdownContent({ content, isDark }: { content: string; isDark: boolean }) {
+  // Proses furigana terlebih dahulu
+  const processedContent = content.replace(/\[(.*?)\]{(.*?)}/g, (_, text, reading) => {
+    return `<ruby>${text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`
+  })
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
+      components={{
+        // Custom component untuk ruby/furigana
+        ruby: ({ children, ...props }) => (
+          <ruby {...props}>{children}</ruby>
+        ),
+        rt: ({ children, ...props }) => (
+          <rt {...props}>{children}</rt>
+        ),
+        // Heading styles
+        h1: ({ children, ...props }) => (
+          <h1 className="text-3xl font-bold mt-8 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white" {...props}>
+            {children}
+          </h1>
+        ),
+        h2: ({ children, ...props }) => (
+          <h2 className="text-2xl font-semibold mt-6 mb-3 text-gray-900 dark:text-white" {...props}>
+            {children}
+          </h2>
+        ),
+        h3: ({ children, ...props }) => (
+          <h3 className="text-xl font-semibold mt-5 mb-2 text-gray-900 dark:text-white" {...props}>
+            {children}
+          </h3>
+        ),
+        h4: ({ children, ...props }) => (
+          <h4 className="text-lg font-semibold mt-4 mb-2 text-gray-900 dark:text-white" {...props}>
+            {children}
+          </h4>
+        ),
+        p: ({ children, ...props }) => (
+          <p className="mb-4 leading-relaxed text-gray-800 dark:text-gray-200" {...props}>
+            {children}
+          </p>
+        ),
+        // List styles
+        ul: ({ children, ...props }) => (
+          <ul className="list-disc list-inside mb-4 space-y-1 text-gray-800 dark:text-gray-200" {...props}>
+            {children}
+          </ul>
+        ),
+        ol: ({ children, ...props }) => (
+          <ol className="list-decimal list-inside mb-4 space-y-1 text-gray-800 dark:text-gray-200" {...props}>
+            {children}
+          </ol>
+        ),
+        li: ({ children, ...props }) => (
+          <li className="ml-4 text-gray-800 dark:text-gray-200" {...props}>{children}</li>
+        ),
+        // Blockquote
+        blockquote: ({ children, ...props }) => (
+          <blockquote className="border-l-4 border-emerald-500 pl-4 py-2 my-4 bg-gray-50 dark:bg-gray-800/50 rounded-r-lg italic text-gray-700 dark:text-gray-300" {...props}>
+            {children}
+          </blockquote>
+        ),
+        // Code blocks - simple version without SyntaxHighlighter
+        code: ({ children, className, ...props }) => {
+          const match = /language-(\w+)/.exec(className || '')
+          const language = match ? match[1] : ''
+          const isInline = !className
+          
+          if (!isInline) {
+            return (
+              <div className="rounded-lg my-4 overflow-hidden">
+                {language && (
+                  <div className="bg-gray-800 dark:bg-gray-700 px-4 py-2 text-xs text-gray-300 border-b border-gray-700">
+                    {language}
+                  </div>
+                )}
+                <pre className="bg-gray-900 dark:bg-gray-900 p-4 overflow-x-auto text-sm">
+                  <code className={`text-gray-200 font-mono`} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              </div>
+            )
+          }
+          
+          return (
+            <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-gray-800 dark:text-gray-200" {...props}>
+              {children}
+            </code>
+          )
+        },
+        // Table styles
+        table: ({ children, ...props }) => (
+          <div className="overflow-x-auto my-4">
+            <table className="min-w-full border-collapse border border-gray-200 dark:border-gray-700" {...props}>
+              {children}
+            </table>
+          </div>
+        ),
+        th: ({ children, ...props }) => (
+          <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 bg-gray-50 dark:bg-gray-800 font-semibold text-left text-gray-900 dark:text-white" {...props}>
+            {children}
+          </th>
+        ),
+        td: ({ children, ...props }) => (
+          <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-gray-800 dark:text-gray-200" {...props}>{children}</td>
+        ),
+        // Links
+        a: ({ children, href, ...props }) => (
+          <a href={href} className="text-emerald-600 hover:text-emerald-700 underline" target="_blank" rel="noopener noreferrer" {...props}>
+            {children}
+          </a>
+        ),
+        // Images
+        img: ({ src, alt, ...props }) => (
+          <img src={src} alt={alt} className="max-w-full h-auto rounded-lg my-4 shadow-md" loading="lazy" {...props} />
+        ),
+        // Horizontal rule
+        hr: () => <hr className="my-8 border-t border-gray-200 dark:border-gray-700" />,
+      }}
+    >
+      {processedContent}
+    </ReactMarkdown>
+  )
+}
+
 export default function ReadingDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { theme } = useTheme()
   const { toast } = useToast()
   const contentRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
@@ -145,6 +248,7 @@ export default function ReadingDetailPage() {
   const [shareUrl, setShareUrl] = useState('')
   const [fullImageUrl, setFullImageUrl] = useState<string>('')
   const [siteUrl, setSiteUrl] = useState('https://pipinipon.site')
+  const isDark = theme === "dark"
 
   useEffect(() => {
     setMounted(true)
@@ -163,7 +267,6 @@ export default function ReadingDetailPage() {
         setReading(data)
         setIsBookmarked(data.is_bookmarked || false)
         
-        // Set full image URL for OG image
         if (data.thumbnail) {
           const imgUrl = getReadingImageUrl(data.thumbnail)
           setFullImageUrl(imgUrl || '')
@@ -219,7 +322,6 @@ export default function ReadingDetailPage() {
     }
   }, [])
 
-  // Fungsi untuk menyimpan progress ke backend
   const saveProgress = useCallback(async (percent: number, scrollTop: number, isCompleted: boolean) => {
     if (!reading || !user) return
     
@@ -234,7 +336,7 @@ export default function ReadingDetailPage() {
     }
   }, [reading, user])
 
-  // Handle scroll event dengan debounce - TANPA AUTO SCROLL
+  // Handle scroll event
   useEffect(() => {
     if (!reading || !user || !mounted || !initialLoadDone) return
 
@@ -326,16 +428,15 @@ export default function ReadingDetailPage() {
 
   const getLevelColor = (level: string) => {
     switch (level) {
-      case "N5": return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-      case "N4": return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-      case "N3": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+      case "N5": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+      case "N4": return "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300"
+      case "N3": return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
       case "N2": return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
-      case "N1": return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+      case "N1": return "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300"
       default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
     }
   }
 
-  // Get clean description for meta tags
   const getCleanDescription = () => {
     if (reading?.excerpt) return reading.excerpt
     if (reading?.content) {
@@ -345,12 +446,10 @@ export default function ReadingDetailPage() {
     return "Baca artikel menarik tentang bahasa Jepang di Pipinipon"
   }
 
-  // Get clean title for meta tags
   const getCleanTitle = () => {
     return `${reading?.title || "Artikel"} | Pipinipon - Belajar Bahasa Jepang`
   }
 
-  // Get absolute image URL
   const getAbsoluteImageUrl = () => {
     if (fullImageUrl) return fullImageUrl
     if (reading?.thumbnail) {
@@ -361,7 +460,6 @@ export default function ReadingDetailPage() {
     return `${siteUrl}/og-image.jpg`
   }
 
-  // JSON-LD Schema untuk SEO
   const jsonLdSchema = reading ? {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -396,7 +494,6 @@ export default function ReadingDetailPage() {
     }
   } : null
 
-  // Social media share URLs
   const shareUrls = {
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
     twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(reading?.title || '')}&url=${encodeURIComponent(shareUrl)}`,
@@ -438,13 +535,11 @@ export default function ReadingDetailPage() {
   return (
     <>
       <Head>
-        {/* Basic Meta Tags */}
         <title>{cleanTitle}</title>
         <meta name="description" content={cleanDescription} />
         <meta name="keywords" content={`belajar bahasa jepang, ${reading.level}, membaca bahasa jepang, furigana, ${reading.category}`} />
         <meta name="author" content={reading.author_name || "Pipinipon"} />
         
-        {/* Open Graph / Facebook */}
         <meta property="og:type" content="article" />
         <meta property="og:url" content={shareUrl} />
         <meta property="og:title" content={reading.title} />
@@ -462,7 +557,6 @@ export default function ReadingDetailPage() {
         <meta property="article:section" content={reading.category} />
         <meta property="article:tag" content={`${reading.level}, ${reading.category}, belajar bahasa jepang`} />
         
-        {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:url" content={shareUrl} />
         <meta name="twitter:title" content={reading.title} />
@@ -472,19 +566,11 @@ export default function ReadingDetailPage() {
         <meta name="twitter:site" content="@pipinipon" />
         <meta name="twitter:creator" content="@pipinipon" />
         
-        {/* WhatsApp specific (uses Open Graph) */}
-        {/* Telegram specific (uses Open Graph) */}
-        {/* LinkedIn specific (uses Open Graph) */}
-        
-        {/* Additional meta tags */}
         <meta name="robots" content="index, follow, max-image-preview:large" />
         <link rel="canonical" href={shareUrl} />
-        
-        {/* Pinterest */}
         <meta name="pinterest-rich-pin" content="true" />
       </Head>
 
-      {/* JSON-LD Schema */}
       {jsonLdSchema && (
         <script
           type="application/ld+json"
@@ -492,7 +578,6 @@ export default function ReadingDetailPage() {
         />
       )}
 
-      {/* Share Modal */}
       <ShareModal
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
@@ -501,23 +586,16 @@ export default function ReadingDetailPage() {
       />
 
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-        {/* Progress Bar - sticky top */}
         <div className="sticky top-0 left-0 right-0 z-50">
           <Progress value={progress.progress_percent} className="h-1 rounded-none" />
         </div>
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Back Button */}
-          <Button
-            variant="ghost"
-            onClick={() => router.push("/reading")}
-            className="mb-6 -ml-3"
-          >
+          <Button variant="ghost" onClick={() => router.push("/reading")} className="mb-6 -ml-3">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Kembali
           </Button>
 
-          {/* Header */}
           <div className="mb-8">
             <div className="flex flex-wrap gap-3 mb-4">
               <Badge className={getLevelColor(reading.level)}>
@@ -543,16 +621,12 @@ export default function ReadingDetailPage() {
               </div>
             </div>
 
-            <h1 className="text-3xl md:text-4xl font-bold mb-4">{reading.title}</h1>
-            
+            <h1 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">{reading.title}</h1>
             {reading.author_name && (
-              <p className="text-muted-foreground">
-                Oleh: {reading.author_name}
-              </p>
+              <p className="text-gray-600 dark:text-gray-400">Oleh: {reading.author_name}</p>
             )}
           </div>
 
-          {/* Thumbnail */}
           {imageUrl && (
             <div className="relative h-64 md:h-96 w-full mb-8 rounded-lg overflow-hidden bg-muted">
               <img
@@ -567,31 +641,21 @@ export default function ReadingDetailPage() {
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="flex gap-3 mb-8">
-            <Button
-              variant={isBookmarked ? "japanese" : "outline"}
-              onClick={handleBookmark}
-            >
-              {isBookmarked ? (
-                <BookmarkCheck className="h-4 w-4 mr-2" />
-              ) : (
-                <Bookmark className="h-4 w-4 mr-2" />
-              )}
+            <Button variant={isBookmarked ? "japanese" : "outline"} onClick={handleBookmark}>
+              {isBookmarked ? <BookmarkCheck className="h-4 w-4 mr-2" /> : <Bookmark className="h-4 w-4 mr-2" />}
               {isBookmarked ? "Tersimpan" : "Simpan"}
             </Button>
-            
             <Button variant="outline" onClick={handleShare}>
               <Share2 className="h-4 w-4 mr-2" />
               Bagikan
             </Button>
           </div>
 
-          {/* Reading Progress Indicator Card */}
           <div className="mb-6 p-4 bg-muted/30 rounded-lg">
             <div className="flex justify-between text-sm mb-2">
               <span className="font-medium">Progress Membaca</span>
-              <span className="font-bold text-japanese-600">{progress.progress_percent}%</span>
+              <span className="font-bold text-emerald-600">{progress.progress_percent}%</span>
             </div>
             <Progress value={progress.progress_percent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground mt-2">
@@ -605,78 +669,25 @@ export default function ReadingDetailPage() {
                 ✅ Selamat! Anda telah menyelesaikan artikel ini.
               </p>
             )}
-            {!isCompleted && progress.progress_percent > 0 && (
-              <p className="text-xs text-muted-foreground mt-3">
-                Lanjutkan membaca untuk meningkatkan progress Anda
-              </p>
-            )}
-            {!isCompleted && progress.progress_percent === 0 && (
-              <p className="text-xs text-muted-foreground mt-3">
-                Mulai scroll ke bawah untuk mencatat progress membaca Anda
-              </p>
-            )}
           </div>
 
-          {/* Content with Furigana */}
-          <div 
-            ref={contentRef}
-            className="prose prose-lg dark:prose-invert max-w-none"
-          >
-            {reading.content?.split('\n').map((paragraph: string, idx: number) => (
-              <p key={idx} className="mb-4 leading-relaxed">
-                {parseFurigana(paragraph)}
-              </p>
-            ))}
+          {/* Content with Markdown */}
+          <div className="prose prose-lg max-w-none">
+            <MarkdownContent content={reading.content} isDark={isDark} />
           </div>
 
           {/* Social Share Buttons */}
           <div className="mt-8 pt-6 border-t">
-            <h3 className="text-lg font-semibold mb-4">Bagikan ke Media Sosial</h3>
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Bagikan ke Media Sosial</h3>
             <div className="flex flex-wrap gap-3">
-              <a
-                href={shareUrls.facebook}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-[#1877F2] text-white rounded-lg hover:bg-[#1664d8] transition-colors text-sm font-medium"
-              >
-                Facebook
-              </a>
-              <a
-                href={shareUrls.twitter}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
-              >
-                Twitter
-              </a>
-              <a
-                href={shareUrls.whatsapp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-[#25D366] text-white rounded-lg hover:bg-[#20b859] transition-colors text-sm font-medium"
-              >
-                WhatsApp
-              </a>
-              <a
-                href={shareUrls.telegram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-[#0088cc] text-white rounded-lg hover:bg-[#0077b3] transition-colors text-sm font-medium"
-              >
-                Telegram
-              </a>
-              <a
-                href={shareUrls.linkedin}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-[#0A66C2] text-white rounded-lg hover:bg-[#0955a3] transition-colors text-sm font-medium"
-              >
-                LinkedIn
-              </a>
+              <a href={shareUrls.facebook} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-[#1877F2] text-white rounded-lg hover:bg-[#1664d8] transition-colors text-sm font-medium">Facebook</a>
+              <a href={shareUrls.twitter} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium">Twitter</a>
+              <a href={shareUrls.whatsapp} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-[#25D366] text-white rounded-lg hover:bg-[#20b859] transition-colors text-sm font-medium">WhatsApp</a>
+              <a href={shareUrls.telegram} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-[#0088cc] text-white rounded-lg hover:bg-[#0077b3] transition-colors text-sm font-medium">Telegram</a>
+              <a href={shareUrls.linkedin} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-[#0A66C2] text-white rounded-lg hover:bg-[#0955a3] transition-colors text-sm font-medium">LinkedIn</a>
             </div>
           </div>
 
-          {/* Footer Navigation */}
           <div className="mt-8 pt-8 border-t">
             <Button onClick={() => router.push("/reading")} variant="outline" className="w-full">
               <ArrowLeft className="h-4 w-4 mr-2" />
