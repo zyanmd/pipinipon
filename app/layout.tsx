@@ -9,6 +9,7 @@ import Link from "next/link"
 import { Globe } from "lucide-react"
 import { Suspense } from "react"
 import { GoogleOAuthProvider } from "@react-oauth/google"
+import Script from "next/script"
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────
 const outfit = Outfit({
@@ -263,7 +264,7 @@ const jsonLd = {
       "@id": `${siteUrl}/#product`,
       name: siteName,
       description: siteDescription,
-      image: `${siteUrl}/logo.png`,  // ✅ Ditambahkan kolom image
+      image: `${siteUrl}/logo.png`,
       brand: {
         "@type": "Brand",
         name: siteName,
@@ -326,7 +327,6 @@ const jsonLd = {
         priceCurrency: "IDR",
         availability: "https://schema.org/OnlineOnly",
         url: siteUrl,
-        // ✅ Ditambahkan shippingDetails dan hasMerchantReturnPolicy (opsional tapi direkomendasikan)
         shippingDetails: {
           "@type": "OfferShippingDetails",
           shippingRate: {
@@ -356,7 +356,6 @@ const jsonLd = {
       height: 512,
       license: "https://creativecommons.org/licenses/by/4.0/",
       copyrightNotice: `(c) ${new Date().getFullYear()} ${siteName}`,
-      // ✅ Ditambahkan kolom yang diminta
       creditText: `Logo ${siteName}`,
       creator: {
         "@type": "Organization",
@@ -372,7 +371,6 @@ const jsonLd = {
       caption: "Preview gambar Pipinipon untuk media sosial",
       width: 1200,
       height: 630,
-      // ✅ Ditambahkan kolom yang diminta
       creditText: `Open Graph Image ${siteName}`,
       creator: {
         "@type": "Organization",
@@ -518,6 +516,24 @@ export default function RootLayout({
         className={`${outfit.variable} ${noto.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
+        {/* Google Analytics - gtag.js */}
+        <Script
+          strategy="afterInteractive"
+          src="https://www.googletagmanager.com/gtag/js?id=G-651Y8619HM"
+        />
+        <Script
+          id="google-analytics"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-651Y8619HM');
+            `,
+          }}
+        />
+        
         <ClientProviders>
           <a
             href="#main-content"
