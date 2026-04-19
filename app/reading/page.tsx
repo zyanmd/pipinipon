@@ -123,28 +123,52 @@ function PopularSlider({ readings }: { readings: any[] }) {
     return () => { if (autoTimer.current) clearTimeout(autoTimer.current) }
   }, [scheduleAuto, total])
 
-  // Drag / swipe
+  // Drag / swipe - Perbaikan untuk Android
   useEffect(() => {
     const slider = sliderRef.current
     if (!slider || total <= 1) return
 
     let startX = 0
+    let startY = 0
     let startTime = 0
     let isDragging = false
+    let isSwiping = false
 
     function onStart(e: MouseEvent | TouchEvent) {
       if (animating.current) return
-      e.preventDefault()
-      if (autoTimer.current) clearTimeout(autoTimer.current)
-      startX = "touches" in e ? e.touches[0].pageX : (e as MouseEvent).pageX
+      
+      // Jangan prevent default pada touch start agar link tetap bisa diklik
+      // Hanya prevent jika memang akan drag
+      const touch = "touches" in e ? e.touches[0] : null
+      startX = touch ? touch.pageX : (e as MouseEvent).pageX
+      startY = touch ? touch.pageY : (e as MouseEvent).pageY
       startTime = Date.now()
       isDragging = true
+      isSwiping = false
       diffRef.current = 0
+      
+      if (autoTimer.current) clearTimeout(autoTimer.current)
+    }
 
-      function onMove(e: MouseEvent | TouchEvent) {
-        if (!isDragging) return
-        const x = "touches" in e ? e.touches[0].pageX : (e as MouseEvent).pageX
-        // PERBAIKAN: window.innerWidth adalah property, bukan function
+    function onMove(e: MouseEvent | TouchEvent) {
+      if (!isDragging) return
+      
+      const touch = "touches" in e ? e.touches[0] : null
+      const x = touch ? touch.pageX : (e as MouseEvent).pageX
+      const y = touch ? touch.pageY : (e as MouseEvent).pageY
+      
+      const deltaX = Math.abs(startX - x)
+      const deltaY = Math.abs(startY - y)
+      
+      // Deteksi apakah ini swipe horizontal
+      if (!isSwiping && (deltaX > 10 || deltaY > 10)) {
+        isSwiping = deltaX > deltaY
+      }
+      
+      // Jika ini swipe horizontal, prevent default agar tidak scroll
+      if (isSwiping) {
+        e.preventDefault()
+        
         const windowWidth = window.innerWidth
         let diff = ((startX - x) / windowWidth) * 70
         
@@ -158,60 +182,72 @@ function PopularSlider({ readings }: { readings: any[] }) {
           sliderRef.current.style.transform = `translate3d(${-idx * 100 - diffRef.current}%,0,0)`
         }
       }
+    }
 
-      function onEnd() {
-        if (!isDragging) return
-        isDragging = false
-        
-        window.removeEventListener("mousemove", onMove)
-        window.removeEventListener("touchmove", onMove)
-        window.removeEventListener("mouseup", onEnd)
-        window.removeEventListener("touchend", onEnd)
-        
-        if (animating.current) return
-        
-        const velocity = Math.abs(diffRef.current) / (Date.now() - startTime) * 100
-        const threshold = 8
-        
-        if (Math.abs(diffRef.current) < threshold && velocity < 0.5) {
-          go(true)
-          return
-        }
-        
-        if (diffRef.current <= -threshold) {
-          navigateLeft()
-        } else if (diffRef.current >= threshold) {
-          navigateRight()
-        } else {
-          go(true)
-        }
+    function onEnd() {
+      if (!isDragging) return
+      
+      const wasSwiping = isSwiping
+      isDragging = false
+      isSwiping = false
+      
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("touchmove", onMove)
+      window.removeEventListener("mouseup", onEnd)
+      window.removeEventListener("touchend", onEnd)
+      
+      if (animating.current) return
+      
+      // Jika bukan swipe, jangan lakukan apa-apa (biarkan link bisa diklik)
+      if (!wasSwiping) {
+        scheduleAuto()
+        return
       }
-
-      window.addEventListener("mousemove", onMove)
-      window.addEventListener("touchmove", onMove, { passive: false })
-      window.addEventListener("mouseup", onEnd)
-      window.addEventListener("touchend", onEnd)
+      
+      const velocity = Math.abs(diffRef.current) / (Date.now() - startTime) * 100
+      const threshold = 8
+      
+      if (Math.abs(diffRef.current) < threshold && velocity < 0.5) {
+        go(true)
+        return
+      }
+      
+      if (diffRef.current <= -threshold) {
+        navigateLeft()
+      } else if (diffRef.current >= threshold) {
+        navigateRight()
+      } else {
+        go(true)
+      }
     }
 
     slider.addEventListener("mousedown", onStart)
-    slider.addEventListener("touchstart", onStart, { passive: false })
+    slider.addEventListener("touchstart", onStart, { passive: true })
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("touchmove", onMove, { passive: false })
+    window.addEventListener("mouseup", onEnd)
+    window.addEventListener("touchend", onEnd)
     
     return () => {
       slider.removeEventListener("mousedown", onStart)
       slider.removeEventListener("touchstart", onStart)
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("touchmove", onMove)
+      window.removeEventListener("mouseup", onEnd)
+      window.removeEventListener("touchend", onEnd)
     }
-  }, [go, navigateLeft, navigateRight, total])
+  }, [go, navigateLeft, navigateRight, total, scheduleAuto])
 
   if (readings.length === 0) return null
 
   return (
-    <div className="relative w-full h-[440px] md:h-[500px] rounded-3xl overflow-hidden select-none cursor-grab active:cursor-grabbing">
-      {/* Navigation buttons */}
+    <div className="relative w-full h-[440px] md:h-[500px] rounded-3xl overflow-hidden">
+      {/* Navigation buttons - Tetap ada untuk desktop */}
       <button
         onClick={navigateLeft}
         disabled={leftInactive}
-        className={`absolute left-0 top-0 h-full w-[12%] z-20 transition-opacity duration-300 focus:outline-none ${
-          leftInactive ? "opacity-0 pointer-events-none" : "opacity-0 hover:opacity-100"
+        className={`absolute left-0 top-0 h-full w-[12%] z-30 transition-opacity duration-300 focus:outline-none ${
+          leftInactive ? "opacity-0 pointer-events-none" : "opacity-0 md:opacity-0 md:hover:opacity-100"
         }`}
         style={{ background: "linear-gradient(to right, rgba(0,0,0,0.22) 0%, transparent 100%)" }}
         aria-label="Previous"
@@ -222,8 +258,8 @@ function PopularSlider({ readings }: { readings: any[] }) {
       <button
         onClick={navigateRight}
         disabled={rightInactive}
-        className={`absolute right-0 top-0 h-full w-[12%] z-20 transition-opacity duration-300 focus:outline-none ${
-          rightInactive ? "opacity-0 pointer-events-none" : "opacity-0 hover:opacity-100"
+        className={`absolute right-0 top-0 h-full w-[12%] z-30 transition-opacity duration-300 focus:outline-none ${
+          rightInactive ? "opacity-0 pointer-events-none" : "opacity-0 md:opacity-0 md:hover:opacity-100"
         }`}
         style={{ background: "linear-gradient(to left, rgba(0,0,0,0.22) 0%, transparent 100%)" }}
         aria-label="Next"
@@ -265,100 +301,103 @@ function PopularSlider({ readings }: { readings: any[] }) {
               className="absolute top-0 w-full h-full overflow-hidden"
               style={{ left: `${i * 100}%` }}
             >
-              {/* Background image full */}
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={reading.title}
-                  draggable={false}
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              {/* Link wrapper untuk seluruh slide - PERBAIKAN UTAMA */}
+              <Link 
+                href={`/reading/${reading.slug}`}
+                className="absolute inset-0 z-10"
+                aria-label={`Baca artikel: ${reading.title}`}
+              >
+                {/* Background image full - pindahkan pointer-events ke auto */}
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt={reading.title}
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-800 to-gray-900" />
+                )}
+
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-black/40" />
+
+                {/* Orange gradient overlay from left */}
+                <div 
+                  className="absolute inset-0 bg-gradient-to-r from-orange-600/80 via-orange-600/40 to-transparent"
+                  style={{
+                    opacity: isActive ? 1 : 0,
+                    transition: "opacity 0.5s 0.3s",
+                  }}
                 />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-800 to-gray-900" />
-              )}
 
-              {/* Dark overlay */}
-              <div className="absolute inset-0 bg-black/40" />
-
-              {/* Orange gradient overlay from left */}
-              <div 
-                className="absolute inset-0 bg-gradient-to-r from-orange-600/80 via-orange-600/40 to-transparent"
-                style={{
-                  opacity: isActive ? 1 : 0,
-                  transition: "opacity 0.5s 0.3s",
-                }}
-              />
-
-              {/* Text overlay */}
-              <div
-                className="absolute left-[8%] bottom-[12%] w-[90%] md:w-[45%] text-white z-10"
-                style={{
-                  opacity: isActive ? 1 : 0,
-                  transform: isActive ? "translateY(0)" : "translateY(-50%)",
-                  transition: "transform 0.5s 0.5s, opacity 0.5s 0.5s",
-                }}
-              >
-                {/* Level badge */}
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500 text-white text-[11px] font-black uppercase tracking-wider">
-                    <Flame className="h-3 w-3" /> #{i + 1} Populer
-                  </span>
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold backdrop-blur-sm ${lm.color}`}>
-                    {reading.level}
-                  </span>
-                </div>
-
-                <p className="text-[11px] font-bold uppercase tracking-widest mb-1.5 opacity-80">
-                  {reading.category || "Artikel"}
-                </p>
-
-                <h2 className="font-extrabold text-2xl md:text-3xl lg:text-4xl leading-tight mb-3 drop-shadow-sm line-clamp-2">
-                  {reading.title}
-                </h2>
-
-                <div className="flex items-center gap-1.5 mb-3 text-white/70 text-xs">
-                  <User className="h-3 w-3" />
-                  <span>{reading.author_name || "Pipinipon"}</span>
-                </div>
-
-                <p className="text-white/60 text-xs leading-relaxed mb-4 line-clamp-3 hidden md:block">
-                  {reading.excerpt || reading.content?.replace(/<[^>]*>/g, "").substring(0, 140) + "…"}
-                </p>
-
-                {/* Stats row */}
-                <div className="flex items-center gap-4 text-white/50 text-xs mb-4">
-                  <span className="flex items-center gap-1"><Eye className="h-3 w-3" />{reading.views?.toLocaleString() || 0}</span>
-                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{reading.reading_time || "5–10 menit"}</span>
-                  <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" />{formatDate(reading.published_at || reading.created_at)}</span>
-                </div>
-
-                {/* CTA button */}
-                <Link
-                  href={`/reading/${reading.slug}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="group/link inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-all duration-300 hover:gap-3"
+                {/* Text overlay */}
+                <div
+                  className="absolute left-[8%] bottom-[12%] w-[90%] md:w-[45%] text-white"
+                  style={{
+                    opacity: isActive ? 1 : 0,
+                    transform: isActive ? "translateY(0)" : "translateY(-50%)",
+                    transition: "transform 0.5s 0.5s, opacity 0.5s 0.5s",
+                  }}
                 >
-                  Baca Artikel
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover/link:translate-x-1" />
-                </Link>
-              </div>
+                  {/* Level badge */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500 text-white text-[11px] font-black uppercase tracking-wider">
+                      <Flame className="h-3 w-3" /> #{i + 1} Populer
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold backdrop-blur-sm ${lm.color}`}>
+                      {reading.level}
+                    </span>
+                  </div>
 
-              {/* Right side metadata */}
-              <div
-                className="absolute right-8 top-1/2 -translate-y-1/2 text-right hidden lg:flex flex-col items-end gap-2 z-10"
-                style={{
-                  opacity: isActive ? 1 : 0,
-                  transition: "opacity 0.5s 0.7s",
-                }}
-              >
-                <span className="text-white/30 text-[10px] font-mono tabular-nums">
-                  {String(i + 1).padStart(2, "0")} / {String(readings.length).padStart(2, "0")}
-                </span>
-                <div className="w-px h-12 bg-white/20 self-end" />
-                <div className="flex flex-col items-end gap-1 text-white/40 text-[11px]">
-                  <span>{reading.views?.toLocaleString() || 0} views</span>
+                  <p className="text-[11px] font-bold uppercase tracking-widest mb-1.5 opacity-80">
+                    {reading.category || "Artikel"}
+                  </p>
+
+                  <h2 className="font-extrabold text-2xl md:text-3xl lg:text-4xl leading-tight mb-3 drop-shadow-sm line-clamp-2">
+                    {reading.title}
+                  </h2>
+
+                  <div className="flex items-center gap-1.5 mb-3 text-white/70 text-xs">
+                    <User className="h-3 w-3" />
+                    <span>{reading.author_name || "Pipinipon"}</span>
+                  </div>
+
+                  <p className="text-white/60 text-xs leading-relaxed mb-4 line-clamp-3 hidden md:block">
+                    {reading.excerpt || reading.content?.replace(/<[^>]*>/g, "").substring(0, 140) + "…"}
+                  </p>
+
+                  {/* Stats row */}
+                  <div className="flex items-center gap-4 text-white/50 text-xs mb-4">
+                    <span className="flex items-center gap-1"><Eye className="h-3 w-3" />{reading.views?.toLocaleString() || 0}</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{reading.reading_time || "5–10 menit"}</span>
+                    <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" />{formatDate(reading.published_at || reading.created_at)}</span>
+                  </div>
+
+                  {/* CTA button - Hapus e.stopPropagation() */}
+                  <span className="group/link inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-all duration-300 hover:gap-3">
+                    Baca Artikel
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover/link:translate-x-1" />
+                  </span>
                 </div>
-              </div>
+
+                {/* Right side metadata */}
+                <div
+                  className="absolute right-8 top-1/2 -translate-y-1/2 text-right hidden lg:flex flex-col items-end gap-2"
+                  style={{
+                    opacity: isActive ? 1 : 0,
+                    transition: "opacity 0.5s 0.7s",
+                  }}
+                >
+                  <span className="text-white/30 text-[10px] font-mono tabular-nums">
+                    {String(i + 1).padStart(2, "0")} / {String(readings.length).padStart(2, "0")}
+                  </span>
+                  <div className="w-px h-12 bg-white/20 self-end" />
+                  <div className="flex flex-col items-end gap-1 text-white/40 text-[11px]">
+                    <span>{reading.views?.toLocaleString() || 0} views</span>
+                  </div>
+                </div>
+              </Link>
             </div>
           )
         })}
